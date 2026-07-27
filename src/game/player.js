@@ -1,3 +1,4 @@
+import { moveAndCollide } from '../engine/physics.js';
 import {
   TILE,
   PLAYER_WIDTH,
@@ -9,53 +10,70 @@ import {
   AIR_CONTROL,
   GRAVITY,
   JUMP_SPEED,
+  FALL_GRAVITY_MULTIPLIER,
+  JUMP_CUT_MULTIPLIER,
   MAX_FALL_SPEED,
+  COYOTE_TIME,
+  JUMP_BUFFER_TIME,
   FALL_OUT_MARGIN
 } from '../engine/constants.js';
 
-// Этап 1: движение и коллизии живут здесь целиком. На Этапе 2 разбор столкновений
-// уедет в engine/physics.js, а сюда приедут coyote time, jump buffer и variable jump —
-// то есть всё, что отвечает не за «куда», а за «как приятно».
-
-// Чтобы игрок, стоящий вплотную к стене, не считался залезшим в соседний тайл.
-const EPSILON = 1e-6;
+// Игрок отвечает за «как ощущается»: намерение из ввода превращается в скорость,
+// а разбором столкновений занимается engine/physics.js.
 
 export function createPlayer(spawn) {
   const [column, line] = spawn;
-  const player = {
+  return {
     x: column * TILE,
     y: line * TILE,
     // Позиция на прошлом шаге — рендер интерполирует между ней и текущей.
     previousX: column * TILE,
     previousY: line * TILE,
+    width: PLAYER_WIDTH,
+    height: PLAYER_HEIGHT,
     velocityX: 0,
     velocityY: 0,
     onGround: false,
     facing: 1,
-    spawnX: column * TILE,
-    spawnY: line * TILE
+    // Окно, в котором прыжок ещё засчитывается после схода с платформы.
+    coyoteTimer: 0,
+    // Нажатие, сделанное чуть раньше приземления, ждёт своего момента здесь.
+    jumpBufferTimer: 0,
+    // Прыжок в подъёме и кнопку ещё не отпускали — только такой можно подрезать.
+    isJumping: false,
+    respawnX: column * TILE,
+    respawnY: line * TILE,
+    // Считаем падения: на Этапе 3 из этого вырастут жизни и HUD.
+    falls: 0
   };
-  return player;
 }
 
 export function updatePlayer(player, input, map, dt) {
   player.previousX = player.x;
   player.previousY = player.y;
 
+  updateTimers(player, input, dt);
   applyHorizontalControl(player, input, dt);
-  applyJump(player, input);
+  tryJump(player);
+  applyJumpCut(player, input);
   applyGravity(player, dt);
 
-  // Оси разбираются по очереди: сначала полностью решаем X, потом Y. Если двигать
-  // обе сразу, угол игрока и угол тайла пересекутся, и выталкивать его будет некуда.
-  player.x += player.velocityX * dt;
-  resolveHorizontal(player, map);
+  const contacts = moveAndCollide(player, map, dt);
+  player.onGround = contacts.below;
+  if (contacts.below) player.isJumping = false;
 
-  player.y += player.velocityY * dt;
-  player.onGround = false;
-  resolveVertical(player, map);
+  return clampToLevel(player, map);
+}
 
-  clampToLevel(player, map);
+function updateTimers(player, input, dt) {
+  // На земле окно всё время полное, в воздухе — тает.
+  player.coyoteTimer = player.onGround ? COYOTE_TIME : Math.max(0, player.coyoteTimer - dt);
+
+  if (input.consumePress('jump')) {
+    player.jumpBufferTimer = JUMP_BUFFER_TIME;
+  } else {
+    player.jumpBufferTimer = Math.max(0, player.jumpBufferTimer - dt);
+  }
 }
 
 function applyHorizontalControl(player, input, dt) {
@@ -78,75 +96,53 @@ function applyHorizontalControl(player, input, dt) {
   }
 }
 
-function applyJump(player, input) {
-  // Нажатие забираем всегда, даже в воздухе, иначе оно дождётся приземления
-  // и сработает само собой. Осознанный буфер прыжка — это Этап 2.
-  const wantsJump = input.consumePress('jump');
-  if (wantsJump && player.onGround) {
-    player.velocityY = -JUMP_SPEED;
-    player.onGround = false;
-  }
+function tryJump(player) {
+  if (player.jumpBufferTimer <= 0 || player.coyoteTimer <= 0) return;
+
+  player.velocityY = -JUMP_SPEED;
+  player.isJumping = true;
+  player.onGround = false;
+  // Оба окна закрываем сразу, иначе одно нажатие успеет отработать дважды:
+  // сначала как буфер, а через кадр — ещё раз внутри койот-времени.
+  player.jumpBufferTimer = 0;
+  player.coyoteTimer = 0;
+}
+
+function applyJumpCut(player, input) {
+  if (!player.isJumping || player.velocityY >= 0) return;
+  if (input.isDown('jump')) return;
+
+  player.velocityY *= JUMP_CUT_MULTIPLIER;
+  // Подрезаем один раз за прыжок: иначе каждый следующий кадр делил бы скорость
+  // ещё вдвое и подъём обрывался бы мгновенно.
+  player.isJumping = false;
 }
 
 function applyGravity(player, dt) {
-  player.velocityY = Math.min(player.velocityY + GRAVITY * dt, MAX_FALL_SPEED);
+  const gravity = player.velocityY > 0 ? GRAVITY * FALL_GRAVITY_MULTIPLIER : GRAVITY;
+  player.velocityY = Math.min(player.velocityY + gravity * dt, MAX_FALL_SPEED);
 }
 
-function resolveHorizontal(player, map) {
-  if (player.velocityX === 0) return;
-
-  const lineFrom = Math.floor(player.y / TILE);
-  const lineTo = Math.floor((player.y + PLAYER_HEIGHT - EPSILON) / TILE);
-  const columnFrom = Math.floor(player.x / TILE);
-  const columnTo = Math.floor((player.x + PLAYER_WIDTH - EPSILON) / TILE);
-
-  for (let line = lineFrom; line <= lineTo; line++) {
-    for (let column = columnFrom; column <= columnTo; column++) {
-      if (!map.isSolid(column, line)) continue;
-      player.x = player.velocityX > 0 ? column * TILE - PLAYER_WIDTH : (column + 1) * TILE;
-      player.velocityX = 0;
-      return;
-    }
-  }
-}
-
-function resolveVertical(player, map) {
-  if (player.velocityY === 0) return;
-
-  const columnFrom = Math.floor(player.x / TILE);
-  const columnTo = Math.floor((player.x + PLAYER_WIDTH - EPSILON) / TILE);
-  const lineFrom = Math.floor(player.y / TILE);
-  const lineTo = Math.floor((player.y + PLAYER_HEIGHT - EPSILON) / TILE);
-
-  for (let column = columnFrom; column <= columnTo; column++) {
-    for (let line = lineFrom; line <= lineTo; line++) {
-      if (!map.isSolid(column, line)) continue;
-      if (player.velocityY > 0) {
-        player.y = line * TILE - PLAYER_HEIGHT;
-        player.onGround = true;
-      } else {
-        player.y = (line + 1) * TILE;
-      }
-      player.velocityY = 0;
-      return;
-    }
-  }
-}
-
+// Возвращает true, если игрок улетел за нижнюю границу и был возвращён на чекпоинт.
 function clampToLevel(player, map) {
-  player.x = Math.max(0, Math.min(map.widthPx - PLAYER_WIDTH, player.x));
+  player.x = Math.max(0, Math.min(map.widthPx - player.width, player.x));
 
-  if (player.y > map.heightPx + FALL_OUT_MARGIN) {
-    respawn(player);
-  }
+  if (player.y <= map.heightPx + FALL_OUT_MARGIN) return false;
+
+  player.falls += 1;
+  respawn(player);
+  return true;
 }
 
 export function respawn(player) {
-  player.x = player.spawnX;
-  player.y = player.spawnY;
+  player.x = player.respawnX;
+  player.y = player.respawnY;
   player.previousX = player.x;
   player.previousY = player.y;
   player.velocityX = 0;
   player.velocityY = 0;
   player.onGround = false;
+  player.coyoteTimer = 0;
+  player.jumpBufferTimer = 0;
+  player.isJumping = false;
 }

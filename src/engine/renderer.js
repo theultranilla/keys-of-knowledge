@@ -1,24 +1,16 @@
-import {
-  TILE,
-  VIEW_WIDTH,
-  VIEW_HEIGHT,
-  PLAYER_WIDTH,
-  PLAYER_HEIGHT,
-  PALETTE
-} from './constants.js';
+import { createBackground } from './background.js';
+import { TILE, VIEW_WIDTH, VIEW_HEIGHT, PALETTE } from './constants.js';
 
 // Ночная обсерватория: тёмное небо с созвездиями, платформы — меловые линии
 // на грифельной доске. Спрайтов пока нет, всё рисуется фигурами Canvas.
 
-const STAR_COUNT = 90;
 // Выше 2 нет смысла: на телефонах с dpr 3 это втрое больше пикселей ради разницы,
 // которую не видно, зато честно видно по частоте кадров.
 const MAX_PIXEL_RATIO = 2;
 
 export function createRenderer(canvas) {
   const ctx = canvas.getContext('2d', { alpha: false });
-  const stars = createStars(STAR_COUNT);
-  let sky = null;
+  const background = createBackground();
 
   function resize() {
     const ratio = Math.min(window.devicePixelRatio || 1, MAX_PIXEL_RATIO);
@@ -38,7 +30,6 @@ export function createRenderer(canvas) {
     if (canvas.width !== width || canvas.height !== height) {
       canvas.width = width;
       canvas.height = height;
-      sky = null; // градиент привязан к размеру буфера, пересоздадим лениво
     }
 
     // Дальше весь код рисует в логических координатах 960×540 и про реальный
@@ -49,40 +40,38 @@ export function createRenderer(canvas) {
     ctx.imageSmoothingEnabled = false;
   }
 
-  function draw(map, player, alpha) {
-    drawSky();
-    drawStars();
-    drawMap(map);
+  function draw(scene, alpha) {
+    const { map, player, camera, checkpoints } = scene;
+
+    // Камеру интерполируем так же, как игрока: иначе мир дёргался бы ровно на те
+    // доли шага, которые мы только что сгладили самому игроку.
+    const cameraX = lerp(camera.previousX, camera.x, alpha);
+    const cameraY = lerp(camera.previousY, camera.y, alpha);
+
+    background.draw(ctx, { x: cameraX, y: cameraY });
+
+    ctx.save();
+    ctx.translate(-cameraX, -cameraY);
+    drawMap(map, cameraX, cameraY);
+    drawCheckpoints(checkpoints);
     drawPlayer(player, alpha);
+    ctx.restore();
   }
 
-  function drawSky() {
-    if (!sky) {
-      sky = ctx.createLinearGradient(0, 0, 0, VIEW_HEIGHT);
-      sky.addColorStop(0, PALETTE.skyDeep);
-      sky.addColorStop(1, PALETTE.skyMid);
-    }
-    ctx.fillStyle = sky;
-    ctx.fillRect(0, 0, VIEW_WIDTH, VIEW_HEIGHT);
-  }
+  function drawMap(map, cameraX, cameraY) {
+    // Рисуем только то, что попадает в кадр. На карте в тысячи тайлов перебор
+    // всей сетки каждый кадр — самый простой способ потерять 60 FPS на ровном месте.
+    const columnFrom = Math.max(0, Math.floor(cameraX / TILE));
+    const columnTo = Math.min(map.columns - 1, Math.floor((cameraX + VIEW_WIDTH) / TILE));
+    const lineFrom = Math.max(0, Math.floor(cameraY / TILE));
+    const lineTo = Math.min(map.lines - 1, Math.floor((cameraY + VIEW_HEIGHT) / TILE));
 
-  function drawStars() {
-    ctx.fillStyle = PALETTE.chalk;
-    for (const star of stars) {
-      ctx.globalAlpha = star.alpha;
-      ctx.beginPath();
-      ctx.arc(star.x, star.y, star.radius, 0, Math.PI * 2);
-      ctx.fill();
-    }
-    ctx.globalAlpha = 1;
-  }
-
-  function drawMap(map) {
-    for (let line = 0; line < map.lines; line++) {
-      for (let column = 0; column < map.columns; column++) {
+    for (let line = lineFrom; line <= lineTo; line++) {
+      for (let column = columnFrom; column <= columnTo; column++) {
         const kind = map.tileAt(column, line);
-        if (kind === 'empty') continue;
-        drawTile(kind, column * TILE, line * TILE);
+        if (kind === 'ground' || kind === 'platform') {
+          drawTile(kind, column * TILE, line * TILE);
+        }
       }
     }
   }
@@ -102,13 +91,42 @@ export function createRenderer(canvas) {
     ctx.globalAlpha = 1;
 
     // Тонкая линия по верху: подчёркивает, куда именно можно приземлиться.
-    ctx.strokeStyle = PALETTE.chalk;
     ctx.globalAlpha = isGround ? 0.5 : 0.85;
     ctx.beginPath();
     ctx.moveTo(x + 4, y + 2.5);
     ctx.lineTo(x + TILE - 4, y + 2.5);
     ctx.stroke();
     ctx.globalAlpha = 1;
+  }
+
+  function drawCheckpoints(checkpoints) {
+    for (const checkpoint of checkpoints) {
+      const poleX = checkpoint.x + 2;
+      const top = checkpoint.y;
+
+      ctx.strokeStyle = checkpoint.active ? PALETTE.teal : PALETTE.chalk;
+      ctx.globalAlpha = checkpoint.active ? 1 : 0.45;
+      ctx.lineWidth = 2;
+      ctx.beginPath();
+      ctx.moveTo(poleX, top);
+      ctx.lineTo(poleX, top + checkpoint.height);
+      ctx.stroke();
+
+      // Пройденный флажок разворачивается и заливается: разница видна боковым
+      // зрением, без всякой надписи.
+      ctx.beginPath();
+      ctx.moveTo(poleX, top + 2);
+      ctx.lineTo(poleX + (checkpoint.active ? 13 : 8), top + 7);
+      ctx.lineTo(poleX, top + 12);
+      ctx.closePath();
+      if (checkpoint.active) {
+        ctx.fillStyle = PALETTE.teal;
+        ctx.fill();
+      } else {
+        ctx.stroke();
+      }
+      ctx.globalAlpha = 1;
+    }
   }
 
   function drawPlayer(player, alpha) {
@@ -118,12 +136,12 @@ export function createRenderer(canvas) {
     const y = lerp(player.previousY, player.y, alpha);
 
     ctx.fillStyle = PALETTE.chalk;
-    roundedRect(x, y, PLAYER_WIDTH, PLAYER_HEIGHT, 6);
+    roundedRect(x, y, player.width, player.height, 6);
     ctx.fill();
 
     // Янтарный фонарик смотрит туда же, куда бежит игрок.
     ctx.fillStyle = PALETTE.amber;
-    const lampX = player.facing > 0 ? x + PLAYER_WIDTH - 8 : x + 2;
+    const lampX = player.facing > 0 ? x + player.width - 8 : x + 2;
     roundedRect(lampX, y + 7, 6, 6, 2);
     ctx.fill();
 
@@ -147,26 +165,4 @@ export function createRenderer(canvas) {
 
 function lerp(from, to, t) {
   return from + (to - from) * t;
-}
-
-// Свой крошечный ГПСЧ: созвездия должны быть одинаковыми между перезагрузками
-// и не перерисовываться при каждом ресайзе. Настоящий сидируемый rng для
-// генераторов задач появится на Этапе 4, здесь он был бы лишней связью.
-function createStars(count) {
-  let seed = 20260727;
-  const random = () => {
-    seed = (seed * 1664525 + 1013904223) >>> 0;
-    return seed / 4294967296;
-  };
-
-  const stars = [];
-  for (let index = 0; index < count; index++) {
-    stars.push({
-      x: random() * VIEW_WIDTH,
-      y: random() * VIEW_HEIGHT * 0.8,
-      radius: 0.6 + random() * 1.4,
-      alpha: 0.2 + random() * 0.5
-    });
-  }
-  return stars;
 }
