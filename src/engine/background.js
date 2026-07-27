@@ -1,3 +1,4 @@
+import { prefersReducedMotion } from './motion.js';
 import {
   VIEW_WIDTH,
   VIEW_HEIGHT,
@@ -16,14 +17,6 @@ export function createBackground() {
   const far = createStars(FAR_STARS, 20260727, 0.5, 1.4, 0.18, 0.45);
   const near = createStars(NEAR_STARS, 991733, 1.1, 2.2, 0.45, 0.85);
 
-  // Читаем один раз при создании, но слушаем изменения: пользователь может
-  // переключить настройку системы, не перезагружая игру.
-  const motionQuery = window.matchMedia('(prefers-reduced-motion: reduce)');
-  let reducedMotion = motionQuery.matches;
-  motionQuery.addEventListener('change', (event) => {
-    reducedMotion = event.matches;
-  });
-
   let sky = null;
   let skyHeight = 0;
 
@@ -41,8 +34,9 @@ export function createBackground() {
     // При prefers-reduced-motion фон замирает: движущиеся с разной скоростью
     // слои — ровно тот эффект, от которого людям с вестибулярной чувствительностью
     // становится плохо.
-    const offsetX = reducedMotion ? 0 : camera.x;
-    const offsetY = reducedMotion ? 0 : camera.y;
+    const reduced = prefersReducedMotion();
+    const offsetX = reduced ? 0 : camera.x;
+    const offsetY = reduced ? 0 : camera.y;
 
     drawLayer(ctx, far, offsetX * PARALLAX_FAR, offsetY * PARALLAX_FAR);
     drawLayer(ctx, near, offsetX * PARALLAX_NEAR, offsetY * PARALLAX_NEAR);

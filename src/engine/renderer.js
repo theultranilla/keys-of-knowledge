@@ -41,7 +41,7 @@ export function createRenderer(canvas) {
   }
 
   function draw(scene, alpha) {
-    const { map, player, camera, checkpoints } = scene;
+    const { map, player, camera, checkpoints, pop } = scene;
 
     // Камеру интерполируем так же, как игрока: иначе мир дёргался бы ровно на те
     // доли шага, которые мы только что сгладили самому игроку.
@@ -54,8 +54,38 @@ export function createRenderer(canvas) {
     ctx.translate(-cameraX, -cameraY);
     drawMap(map, cameraX, cameraY);
     drawCheckpoints(checkpoints);
-    drawPlayer(player, alpha);
+    // Лопнувшего игрока не рисуем — вместо него на экране осколки.
+    if (player.popTimer <= 0) drawPlayer(player, alpha);
+    drawPop(pop);
     ctx.restore();
+  }
+
+  function drawPop(pop) {
+    if (!pop) return;
+
+    const ring = pop.ring;
+    if (ring) {
+      // Кольцо расширяется и гаснет — обозначает точку хлопка.
+      const progress = 1 - ring.life / pop.ringLifetime;
+      ctx.strokeStyle = PALETTE.chalk;
+      ctx.globalAlpha = (1 - progress) * 0.7;
+      ctx.lineWidth = 3 * (1 - progress) + 1;
+      ctx.beginPath();
+      ctx.arc(ring.x, ring.y, pop.ringRadius * progress, 0, Math.PI * 2);
+      ctx.stroke();
+      ctx.globalAlpha = 1;
+    }
+
+    for (const shard of pop.shards) {
+      ctx.save();
+      ctx.translate(shard.x, shard.y);
+      ctx.rotate(shard.angle);
+      ctx.globalAlpha = Math.min(1, shard.life / shard.maxLife);
+      ctx.fillStyle = shard.color;
+      ctx.fillRect(-shard.size / 2, -shard.size / 2, shard.size, shard.size);
+      ctx.restore();
+    }
+    ctx.globalAlpha = 1;
   }
 
   function drawMap(map, cameraX, cameraY) {

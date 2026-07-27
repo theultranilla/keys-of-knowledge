@@ -15,7 +15,8 @@ import {
   MAX_FALL_SPEED,
   COYOTE_TIME,
   JUMP_BUFFER_TIME,
-  FALL_OUT_MARGIN
+  FALL_OUT_MARGIN,
+  POP_DURATION
 } from '../engine/constants.js';
 
 // Игрок отвечает за «как ощущается»: намерение из ввода превращается в скорость,
@@ -43,14 +44,26 @@ export function createPlayer(spawn) {
     isJumping: false,
     respawnX: column * TILE,
     respawnY: line * TILE,
+    // Пока больше нуля — игрок лопнут: не рисуется, не управляется, ждёт возврата.
+    popTimer: 0,
     // Считаем падения: на Этапе 3 из этого вырастут жизни и HUD.
     falls: 0
   };
 }
 
+// Возвращает true, если игрок был телепортирован (лопнул и вернулся, или улетел
+// вниз) — вызывающий код по этому признаку решает, пора ли переставить камеру.
 export function updatePlayer(player, input, map, dt) {
   player.previousX = player.x;
   player.previousY = player.y;
+
+  if (player.popTimer > 0) {
+    // Физики на время хлопка нет: осколки летят сами по себе, а игрок ждёт.
+    player.popTimer = Math.max(0, player.popTimer - dt);
+    if (player.popTimer > 0) return false;
+    respawn(player);
+    return true;
+  }
 
   updateTimers(player, input, dt);
   applyHorizontalControl(player, input, dt);
@@ -134,6 +147,17 @@ function clampToLevel(player, map) {
   return true;
 }
 
+// Запускает хлопок. Возвращает false, если игрок уже лопнут — тогда сыпать
+// осколки второй раз не нужно.
+export function startPop(player) {
+  if (player.popTimer > 0) return false;
+
+  player.popTimer = POP_DURATION;
+  player.velocityX = 0;
+  player.velocityY = 0;
+  return true;
+}
+
 export function respawn(player) {
   player.x = player.respawnX;
   player.y = player.respawnY;
@@ -145,4 +169,5 @@ export function respawn(player) {
   player.coyoteTimer = 0;
   player.jumpBufferTimer = 0;
   player.isJumping = false;
+  player.popTimer = 0;
 }

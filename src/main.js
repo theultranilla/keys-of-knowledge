@@ -2,8 +2,10 @@ import { createLoop } from './engine/loop.js';
 import { createInput } from './engine/input.js';
 import { createRenderer } from './engine/renderer.js';
 import { createCamera } from './engine/camera.js';
-import { createPlayer, updatePlayer } from './game/player.js';
+import { prefersReducedMotion } from './engine/motion.js';
+import { createPlayer, updatePlayer, startPop, respawn } from './game/player.js';
 import { createCheckpoints } from './game/checkpoints.js';
+import { createPop } from './game/pop.js';
 import { testMap } from './game/testMap.js';
 
 // Бутстрап Этапа 2: цикл, ввод, рендер, камера и одна хардкод-карта.
@@ -16,17 +18,37 @@ const input = createInput();
 const map = testMap;
 const player = createPlayer(map.spawn);
 const checkpoints = createCheckpoints(map);
+const pop = createPop();
 const camera = createCamera(map);
 camera.snapTo(player);
 
-const scene = { map, player, camera, checkpoints: checkpoints.list };
+const scene = { map, player, camera, checkpoints: checkpoints.list, pop };
+
+// Игрок сам возвращает себя на чекпоинт. Страховка от геометрии, из которой
+// не выпрыгнуть: без неё единственный выход — перезагрузка страницы.
+function selfDestruct() {
+  if (player.popTimer > 0) return;
+
+  if (prefersReducedMotion()) {
+    // Разлетающиеся частицы — ровно то, что просили отключить. Возвращаем сразу.
+    respawn(player);
+    camera.snapTo(player);
+    return;
+  }
+
+  pop.burst(player.x + player.width / 2, player.y + player.height / 2);
+  startPop(player);
+}
 
 function update(dt) {
-  const fellOut = updatePlayer(player, input, map, dt);
+  if (input.consumePress('respawn')) selfDestruct();
+
+  const teleported = updatePlayer(player, input, map, dt);
+  pop.update(dt);
   checkpoints.update(player);
 
-  if (fellOut) {
-    // После респауна камера должна уже стоять на месте, а не лететь через
+  if (teleported) {
+    // После возвращения камера должна уже стоять на месте, а не лететь через
     // полкарты, показывая игроку дорогу, которую он только что не прошёл.
     camera.snapTo(player);
     return;

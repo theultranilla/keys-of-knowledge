@@ -53,6 +53,16 @@ export const JUMP_BUFFER_TIME = 0.12;
 // Провалился ниже уровня — возвращаем на последний чекпоинт.
 export const FALL_OUT_MARGIN = 240;
 
+// --- Хлопок и возвращение на чекпоинт ---
+
+// Сколько игрок остаётся лопнувшим до появления на чекпоинте. Меньше 0.3 с —
+// не успеваешь понять, что случилось; больше 0.6 с — начинает раздражать.
+export const POP_DURATION = 0.45;
+export const POP_SHARD_COUNT = 18;
+export const POP_SHARD_SPEED = 260; // px/с, начальный разлёт осколков
+export const POP_SHARD_GRAVITY = 900;
+export const POP_SHARD_LIFETIME = 0.75;
+
 // --- Камера ---
 
 // Мёртвая зона: пока игрок в этом прямоугольнике вокруг центра, камера стоит.
