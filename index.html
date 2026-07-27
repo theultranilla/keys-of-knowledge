@@ -1,0 +1,45 @@
+<!doctype html>
+<html lang="ru">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+    <meta name="color-scheme" content="dark" />
+    <meta name="description" content="Ключи знаний — образовательный платформер: беги, прыгай, решай задачи по алгебре, геометрии и физике." />
+    <title>Ключи знаний</title>
+
+    <!-- Иконка инлайном: файла нет — нет и запроса за favicon.ico, который иначе
+         светится 404-й в консоли на любом статическом хостинге. -->
+    <link
+      rel="icon"
+      href="data:image/svg+xml,%3Csvg%20xmlns='http://www.w3.org/2000/svg'%20viewBox='0%200%2032%2032'%3E%3Crect%20width='32'%20height='32'%20rx='7'%20fill='%23141B34'/%3E%3Cg%20fill='none'%20stroke='%23F2A83B'%20stroke-width='3'%20stroke-linecap='round'%3E%3Ccircle%20cx='12.5'%20cy='12.5'%20r='5'/%3E%3Cpath%20d='M16%2016%20L23.5%2023.5'/%3E%3Cpath%20d='M19%2023%20L21%2021'/%3E%3C/g%3E%3C/svg%3E"
+    />
+
+    <!-- Единственная внешняя зависимость. Если CDN недоступен, main.css подставит
+         системные шрифты и игра этого даже не заметит. -->
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link
+      rel="stylesheet"
+      href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;700&family=Nunito:wght@400;600&family=Rubik:wght@700;900&display=swap"
+    />
+    <link rel="stylesheet" href="./styles/main.css" />
+  </head>
+  <body>
+    <main class="stage">
+      <canvas
+        id="game"
+        width="960"
+        height="540"
+        tabindex="0"
+        role="application"
+        aria-label="Игровое поле: беги стрелками, прыгай пробелом"
+      ></canvas>
+    </main>
+
+    <p class="controls-hint">
+      <b>← →</b> или <b>A/D</b> — бежать · <b>Space</b>, <b>↑</b>, <b>W</b> — прыжок
+    </p>
+
+    <script type="module" src="./src/main.js"></script>
+  </body>
+</html>

@@ -1,0 +1,105 @@
+/* Палитра из раздела 8 ТЗ. Те же значения продублированы в src/engine/constants.js:
+   canvas красится через JS, вёрстка — через CSS, но цвет должен быть один. */
+:root {
+  --sky-deep: #141b34;
+  --sky-mid: #23305a;
+  --chalk: #e8ecf4;
+  --amber: #f2a83b;
+  --teal: #3dbfa8;
+  --coral: #e5615f;
+
+  /* Системные фолбэки идут следом за загружаемыми шрифтами: если Google Fonts
+     не ответил, интерфейс просто выглядит проще, но остаётся читаемым. */
+  --font-display: 'Rubik', 'Segoe UI', system-ui, sans-serif;
+  --font-text: 'Nunito', 'Segoe UI', system-ui, sans-serif;
+  --font-mono: 'JetBrains Mono', ui-monospace, 'Consolas', monospace;
+}
+
+* {
+  box-sizing: border-box;
+}
+
+html,
+body {
+  height: 100%;
+  margin: 0;
+}
+
+body {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 12px;
+  padding: 12px;
+
+  background: var(--sky-deep);
+  color: var(--chalk);
+  font-family: var(--font-text);
+
+  /* Игра не должна скроллиться, зумиться пальцем и выделяться при свайпе. */
+  overflow: hidden;
+  overscroll-behavior: none;
+  touch-action: none;
+  user-select: none;
+  -webkit-user-select: none;
+  -webkit-tap-highlight-color: transparent;
+  -webkit-text-size-adjust: 100%;
+}
+
+.stage {
+  /* Ширина подобрана так, чтобы 16:9 от неё гарантированно влезли по высоте
+     вместе с подсказкой под игрой. Пропорции держит сам canvas (ниже), а не
+     aspect-ratio: у него есть свои width/height, и два механизма спорили бы. */
+  width: min(100%, (100dvh - 90px) * 16 / 9);
+}
+
+#game {
+  display: block;
+  width: 100%;
+  /* height: auto — и canvas сам держит 16:9 по размеру своего буфера. */
+  height: auto;
+  border-radius: 12px;
+  background: var(--sky-deep);
+  box-shadow: 0 18px 50px rgb(0 0 0 / 45%);
+  touch-action: none;
+}
+
+#game:focus-visible {
+  outline: 3px solid var(--amber);
+  outline-offset: 3px;
+}
+
+.controls-hint {
+  margin: 0;
+  font-size: 14px;
+  color: color-mix(in srgb, var(--chalk) 65%, transparent);
+  text-align: center;
+}
+
+.controls-hint b {
+  font-family: var(--font-mono);
+  font-weight: 700;
+  color: var(--amber);
+}
+
+/* Подсказка занимает место, которого на маленьком экране нет. */
+@media (max-height: 480px) {
+  .controls-hint {
+    display: none;
+  }
+
+  .stage {
+    width: min(100%, 100dvh * 16 / 9);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+  }
+}
