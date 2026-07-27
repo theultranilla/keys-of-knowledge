@@ -3,58 +3,161 @@ import { createInput } from './engine/input.js';
 import { createRenderer } from './engine/renderer.js';
 import { createCamera } from './engine/camera.js';
 import { prefersReducedMotion } from './engine/motion.js';
+import { TILE } from './engine/constants.js';
 import { createPlayer, updatePlayer, startPop, respawn } from './game/player.js';
-import { createCheckpoints } from './game/checkpoints.js';
+import { createEntities } from './game/entities.js';
 import { createPop } from './game/pop.js';
-import { testMap } from './game/testMap.js';
+import { loadLevel } from './game/level.js';
+import { createHud } from './ui/hud.js';
 
-// Бутстрап Этапа 2: цикл, ввод, рендер, камера и одна хардкод-карта.
-// Сцены (меню → уровень → пауза) появятся в game/state.js на Этапе 5.
+// Бутстрап Этапа 3: уровень грузится из JSON, сущности живут своей жизнью,
+// счётчики висят на HUD. Конечный автомат сцен (меню → уровень → пауза)
+// появится в game/state.js на Этапе 5, пока сцена ровно одна.
 
 const canvas = document.getElementById('game');
 const renderer = createRenderer(canvas);
 const input = createInput();
-
-const map = testMap;
-const player = createPlayer(map.spawn);
-const checkpoints = createCheckpoints(map);
 const pop = createPop();
-const camera = createCamera(map);
-camera.snapTo(player);
+const hud = createHud();
 
-const scene = { map, player, camera, checkpoints: checkpoints.list, pop };
+// Ключи и открытые сундуки переживают и смерть, и перезапуск уровня. Это
+// инвариант: наказывать за платформинг потерей учебного прогресса нельзя.
+const run = { coins: 0, lives: 3, keys: new Set(), finished: false };
+
+const scene = { map: null, player: null, camera: null, entities: null, pop, hud, hudState: run, time: 0 };
+let level = null;
+let world = null;
+let restartAfterPop = false;
+
+function startLevel() {
+  const entities = createEntities(level);
+  // Ключ на руках означает, что сундук уже открыт: перезапуск уровня не должен
+  // возвращать задачу, которую ребёнок уже прошёл.
+  for (const chest of entities.chests) {
+    if (run.keys.has(chest.keyColor)) chest.opened = true;
+  }
+
+  const player = createPlayer(level.spawn);
+  const camera = createCamera(level);
+  camera.snapTo(player);
+
+  world = { map: level, boxes: entities.solidBoxes };
+  run.coins = 0;
+  run.lives = level.lives;
+  run.finished = false;
+  restartAfterPop = false;
+
+  scene.map = level;
+  scene.entities = entities;
+  scene.player = player;
+  scene.camera = camera;
+}
 
 // Игрок сам возвращает себя на чекпоинт. Страховка от геометрии, из которой
-// не выпрыгнуть: без неё единственный выход — перезагрузка страницы.
+// не выпрыгнуть. Жизни не стоит: это обход бага, а не игровая ошибка.
 function selfDestruct() {
+  const { player, camera } = scene;
   if (player.popTimer > 0) return;
 
   if (prefersReducedMotion()) {
-    // Разлетающиеся частицы — ровно то, что просили отключить. Возвращаем сразу.
     respawn(player);
     camera.snapTo(player);
     return;
   }
-
   pop.burst(player.x + player.width / 2, player.y + player.height / 2);
   startPop(player);
 }
 
+// Возвращает true, если жизни кончились и уровень пора начинать заново.
+function loseLife() {
+  run.lives = Math.max(0, run.lives - 1);
+  return run.lives === 0;
+}
+
+function openChest() {
+  const chest = scene.entities.chestInReach(scene.player);
+  if (!chest) return;
+
+  chest.opened = true;
+  run.keys.add(chest.keyColor);
+  hud.gainKey(chest.keyColor);
+  // ЗАГЛУШКА Этапа 3: ключ выдаётся сразу. На Этапе 4 здесь встанет карточка с
+  // задачей, и ключ поедет в руки только после ответа — или после разбора.
+}
+
+function handleEvent(event) {
+  const { player, camera } = scene;
+
+  switch (event.type) {
+    case 'coin':
+      run.coins += 1;
+      break;
+
+    case 'checkpoint':
+      // Точка возврата — тайл с флажком: игрок появится на той же земле,
+      // на которой этот флажок и стоит.
+      player.respawnX = event.checkpoint.column * TILE + (TILE - player.width) / 2;
+      player.respawnY = event.checkpoint.line * TILE + TILE - player.height;
+      break;
+
+    case 'spike':
+      if (player.popTimer > 0) break;
+      pop.burst(player.x + player.width / 2, player.y + player.height / 2);
+      startPop(player);
+      restartAfterPop = loseLife();
+      break;
+
+    case 'door-opened':
+      run.finished = true;
+      break;
+
+    case 'door-locked':
+      // Пока просто нельзя пройти. Подсказка «нужен ключ» — Этап 7.
+      break;
+
+    default:
+      break;
+  }
+}
+
 function update(dt) {
-  if (input.consumePress('respawn')) selfDestruct();
-
-  const teleported = updatePlayer(player, input, map, dt);
+  scene.time += dt;
+  hud.update(dt);
   pop.update(dt);
-  checkpoints.update(player);
 
-  if (teleported) {
-    // После возвращения камера должна уже стоять на месте, а не лететь через
-    // полкарты, показывая игроку дорогу, которую он только что не прошёл.
-    camera.snapTo(player);
+  // Уровень пройден: мир замирает, R начинает его заново. Экран победы и
+  // переход на следующий уровень — Этап 5.
+  if (run.finished) {
+    if (input.consumePress('respawn')) startLevel();
     return;
   }
 
-  camera.update(player, dt);
+  if (input.consumePress('respawn')) selfDestruct();
+
+  scene.entities.update(dt);
+  const outcome = updatePlayer(scene.player, input, world, dt);
+
+  if (outcome === 'fell') {
+    if (loseLife()) startLevel();
+    else scene.camera.snapTo(scene.player);
+    return;
+  }
+
+  if (outcome === 'popped') {
+    if (restartAfterPop) startLevel();
+    else scene.camera.snapTo(scene.player);
+    return;
+  }
+
+  if (scene.player.popTimer > 0) {
+    scene.camera.update(scene.player, dt);
+    return;
+  }
+
+  if (input.consumePress('interact')) openChest();
+  for (const event of scene.entities.collide(scene.player, run.keys)) handleEvent(event);
+
+  scene.camera.update(scene.player, dt);
 }
 
 const loop = createLoop({
@@ -78,4 +181,9 @@ document.addEventListener('visibilitychange', () => {
 });
 
 renderer.resize();
+
+// Уровень выбирается через ?level=02 — удобно проверять карту, не трогая код.
+const levelId = new URLSearchParams(window.location.search).get('level') ?? '01';
+level = await loadLevel(levelId);
+startLevel();
 loop.start();

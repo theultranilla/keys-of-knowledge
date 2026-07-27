@@ -7,22 +7,70 @@ import { TILE } from './constants.js';
 // координата 64 при тайле 32 принадлежит второму тайлу, а не третьему.
 const EPSILON = 1e-6;
 
-// Двигает тело по скорости и разбирает столкновения. Возвращает, чего тело
-// коснулось на этом шаге — вызывающий код решает, что это значит: приземление,
-// удар головой или упор в стену.
-export function moveAndCollide(body, map, dt) {
-  const contacts = { left: false, right: false, above: false, below: false };
+// Двигает тело по скорости и разбирает столкновения — сначала с тайловой сеткой,
+// потом с подвижными коробками (движущимися платформами). Возвращает, чего тело
+// коснулось на этом шаге: приземление, удар головой, упор в стену, а в
+// `ground` — та самая коробка, если тело встало именно на неё.
+//
+// `world` — это { map, boxes }.
+export function moveAndCollide(body, world, dt) {
+  const contacts = { left: false, right: false, above: false, below: false, ground: null };
+  const boxes = world.boxes ?? [];
 
   // Оси разбираются по очереди: сначала полностью решаем X, потом Y. Если двигать
   // обе сразу, угол тела и угол тайла пересекутся, и выталкивать его будет некуда —
   // непонятно, упёрлись мы в стену или встали на пол.
   body.x += body.velocityX * dt;
-  resolveHorizontal(body, map, contacts);
+  resolveHorizontal(body, world.map, contacts);
+  resolveHorizontalBoxes(body, boxes, contacts);
 
   body.y += body.velocityY * dt;
-  resolveVertical(body, map, contacts);
+  resolveVertical(body, world.map, contacts);
+  resolveVerticalBoxes(body, boxes, contacts);
 
   return contacts;
+}
+
+// Платформа может въехать в неподвижное тело сама — тогда направление
+// выталкивания берём не по скорости тела, а по тому, с какой стороны оно
+// торчит из коробки.
+function resolveHorizontalBoxes(body, boxes, contacts) {
+  for (const box of boxes) {
+    if (!overlaps(body, box)) continue;
+
+    const pushRight =
+      body.velocityX < 0 ||
+      (body.velocityX === 0 && body.x + body.width / 2 > box.x + box.width / 2);
+
+    if (pushRight) {
+      body.x = box.x + box.width;
+      contacts.left = true;
+    } else {
+      body.x = box.x - body.width;
+      contacts.right = true;
+    }
+    body.velocityX = 0;
+  }
+}
+
+function resolveVerticalBoxes(body, boxes, contacts) {
+  for (const box of boxes) {
+    if (!overlaps(body, box)) continue;
+
+    const landing =
+      body.velocityY > 0 ||
+      (body.velocityY === 0 && body.y + body.height / 2 < box.y + box.height / 2);
+
+    if (landing) {
+      body.y = box.y - body.height;
+      contacts.below = true;
+      contacts.ground = box;
+    } else {
+      body.y = box.y + box.height;
+      contacts.above = true;
+    }
+    body.velocityY = 0;
+  }
 }
 
 function resolveHorizontal(body, map, contacts) {

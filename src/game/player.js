@@ -46,23 +46,26 @@ export function createPlayer(spawn) {
     respawnY: line * TILE,
     // Пока больше нуля — игрок лопнут: не рисуется, не управляется, ждёт возврата.
     popTimer: 0,
+    // Платформа, на которой игрок стоит прямо сейчас. Пока она есть — он едет.
+    ridingPlatform: null,
     // Считаем падения: на Этапе 3 из этого вырастут жизни и HUD.
     falls: 0
   };
 }
 
-// Возвращает true, если игрок был телепортирован (лопнул и вернулся, или улетел
-// вниз) — вызывающий код по этому признаку решает, пора ли переставить камеру.
-export function updatePlayer(player, input, map, dt) {
+// Возвращает, чем кончился шаг: `null` — ничего особенного, `'popped'` — хлопок
+// доиграл и игрок вернулся на чекпоинт, `'fell'` — улетел за нижнюю границу.
+// Разница важна: падение стоит жизни, а добровольный хлопок — нет.
+export function updatePlayer(player, input, world, dt) {
   player.previousX = player.x;
   player.previousY = player.y;
 
   if (player.popTimer > 0) {
     // Физики на время хлопка нет: осколки летят сами по себе, а игрок ждёт.
     player.popTimer = Math.max(0, player.popTimer - dt);
-    if (player.popTimer > 0) return false;
+    if (player.popTimer > 0) return null;
     respawn(player);
-    return true;
+    return 'popped';
   }
 
   updateTimers(player, input, dt);
@@ -71,11 +74,19 @@ export function updatePlayer(player, input, map, dt) {
   applyJumpCut(player, input);
   applyGravity(player, dt);
 
-  const contacts = moveAndCollide(player, map, dt);
+  // Игрок едет на платформе: сдвигаем его на её смещение до собственного
+  // движения, иначе она уезжает из-под ног, а он остаётся висеть на месте.
+  if (player.ridingPlatform) {
+    player.x += player.ridingPlatform.deltaX;
+    player.y += player.ridingPlatform.deltaY;
+  }
+
+  const contacts = moveAndCollide(player, world, dt);
   player.onGround = contacts.below;
+  player.ridingPlatform = contacts.ground;
   if (contacts.below) player.isJumping = false;
 
-  return clampToLevel(player, map);
+  return clampToLevel(player, world.map) ? 'fell' : null;
 }
 
 function updateTimers(player, input, dt) {
@@ -170,4 +181,5 @@ export function respawn(player) {
   player.jumpBufferTimer = 0;
   player.isJumping = false;
   player.popTimer = 0;
+  player.ridingPlatform = null;
 }
