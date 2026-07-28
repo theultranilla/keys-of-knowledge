@@ -18,7 +18,45 @@ const ru = {
   'task.exhausted': 'Ничего страшного — вот как это решается. Ключ всё равно твой.',
   'task.empty': 'Впиши ответ числом.',
   'task.not-a-number': 'Нужно число. Дробную часть можно писать через запятую.',
-  'task.figure.alt': 'Чертёж к задаче'
+  'task.figure.alt': 'Чертёж к задаче',
+
+  'menu.title': 'Ключи знаний',
+  'menu.subtitle': 'Беги, прыгай, решай — и открывай двери',
+  'menu.play': 'Играть',
+  'menu.levels': 'Выбрать уровень',
+  'menu.settings': 'Настройки',
+  'menu.back': 'Назад',
+  'menu.noSave': 'Браузер запретил хранилище — прогресс не сохранится',
+
+  'levels.title': 'Выбор уровня',
+  'levels.locked': 'Закрыто',
+  'levels.coins': '{coins} из {max} монет',
+  'levels.best': 'Лучшее время: {time}',
+  'levels.stars': 'Звёзд: {stars} из 3',
+
+  'settings.title': 'Настройки',
+  'settings.sound': 'Звуки',
+  'settings.music': 'Музыка',
+  'settings.reducedMotion': 'Меньше движения',
+  'settings.reset': 'Сбросить прогресс',
+  'settings.resetConfirm': 'Стереть весь прогресс? Отменить это будет нельзя.',
+  'settings.resetYes': 'Стереть',
+  'settings.resetNo': 'Отмена',
+  'settings.resetDone': 'Прогресс стёрт',
+
+  'pause.title': 'Пауза',
+  'pause.resume': 'Продолжить',
+  'pause.toMenu': 'В меню',
+
+  'complete.title': 'Уровень пройден!',
+  'complete.coins': 'Монеты',
+  'complete.time': 'Время',
+  'complete.next': 'Следующий уровень',
+  'complete.retry': 'Пройти заново',
+  'complete.toMenu': 'В меню',
+  'complete.star.done': 'Уровень пройден',
+  'complete.star.coins': 'Собрано больше 80% монет',
+  'complete.star.clean': 'Все задачи решены без разбора'
 };
 
 const dictionaries = { ru };

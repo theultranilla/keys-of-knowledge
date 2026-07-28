@@ -1,20 +1,20 @@
 import { createLoop } from './engine/loop.js';
 import { createInput } from './engine/input.js';
 import { createRenderer } from './engine/renderer.js';
-import { createCamera } from './engine/camera.js';
-import { prefersReducedMotion } from './engine/motion.js';
-import { TILE } from './engine/constants.js';
-import { createPlayer, updatePlayer, startPop, respawn } from './game/player.js';
-import { createEntities } from './game/entities.js';
+import { setReducedMotionOverride } from './engine/motion.js';
 import { createPop } from './game/pop.js';
-import { loadLevel } from './game/level.js';
+import { loadLevel, loadLevelIndex } from './game/level.js';
+import { createSession } from './game/session.js';
+import { createState, SCENE } from './game/state.js';
 import { createHud } from './ui/hud.js';
-import { createTaskEngine } from './tasks/engine.js';
 import { createTaskModal } from './ui/taskModal.js';
+import { createMenu } from './ui/menu.js';
+import { createOverlays } from './ui/overlays.js';
+import { createTaskEngine } from './tasks/engine.js';
+import { createSave } from './save.js';
 
-// Бутстрап Этапа 3: уровень грузится из JSON, сущности живут своей жизнью,
-// счётчики висят на HUD. Конечный автомат сцен (меню → уровень → пауза)
-// появится в game/state.js на Этапе 5, пока сцена ровно одна.
+// Бутстрап: собирает всё вместе и владеет переходами между сценами. Сама игра
+// живёт в game/session.js, экраны — в ui/, прогресс — в save.js.
 
 const canvas = document.getElementById('game');
 const renderer = createRenderer(canvas);
@@ -22,172 +22,134 @@ const input = createInput();
 const pop = createPop();
 const hud = createHud();
 const modal = createTaskModal();
-// Сид забега: пока живёт только в памяти, поэтому перезагрузка страницы даёт
-// новые числа в задачах. Класть его в сохранение будет Этап 5.
-const tasks = createTaskEngine();
+const save = createSave();
 
-// Пока открыта карточка с задачей, мир замирает целиком.
-let paused = false;
+setReducedMotionOverride(save.settings.reducedMotion);
 
-// Ключи и открытые сундуки переживают и смерть, и перезапуск уровня. Это
-// инвариант: наказывать за платформинг потерей учебного прогресса нельзя.
-const run = { coins: 0, lives: 3, keys: new Set(), finished: false };
+const order = await loadLevelIndex();
+const levels = await Promise.all(order.map((id) => loadLevel(id)));
+const levelsById = new Map(levels.map((level) => [level.id, level]));
 
-const scene = { map: null, player: null, camera: null, entities: null, pop, hud, hudState: run, time: 0 };
-let level = null;
-let world = null;
-let restartAfterPop = false;
+const state = createState(onSceneChange);
+let session = null;
+let tasks = null;
+let currentLevelId = null;
 
-function startLevel() {
-  const entities = createEntities(level);
-  // Ключ на руках означает, что сундук уже открыт: перезапуск уровня не должен
-  // возвращать задачу, которую ребёнок уже прошёл.
-  for (const chest of entities.chests) {
-    if (run.keys.has(chest.keyColor)) chest.opened = true;
+const menu = createMenu({
+  mount: document.body,
+  save,
+  levels,
+  on: {
+    play: () => startLevel(nextPlayableId()),
+    levels: () => state.go(SCENE.LEVELS),
+    settings: () => state.go(SCENE.SETTINGS),
+    back: () => state.go(state.previous === SCENE.PAUSED ? SCENE.PAUSED : SCENE.MENU),
+    pick: (id) => startLevel(id),
+    setting: (name, value) => {
+      save.setSetting(name, value);
+      if (name === 'reducedMotion') setReducedMotionOverride(value);
+    },
+    reset: () => {
+      save.reset();
+      setReducedMotionOverride(save.settings.reducedMotion);
+    }
   }
+});
 
-  const player = createPlayer(level.spawn);
-  const camera = createCamera(level);
-  camera.snapTo(player);
-
-  world = { map: level, boxes: entities.solidBoxes };
-  run.coins = 0;
-  run.lives = level.lives;
-  run.finished = false;
-  restartAfterPop = false;
-
-  scene.map = level;
-  scene.entities = entities;
-  scene.player = player;
-  scene.camera = camera;
-}
-
-// Игрок сам возвращает себя на чекпоинт. Страховка от геометрии, из которой
-// не выпрыгнуть. Жизни не стоит: это обход бага, а не игровая ошибка.
-function selfDestruct() {
-  const { player, camera } = scene;
-  if (player.popTimer > 0) return;
-
-  if (prefersReducedMotion()) {
-    respawn(player);
-    camera.snapTo(player);
-    return;
+const overlays = createOverlays({
+  mount: document.body,
+  on: {
+    resume: () => state.go(SCENE.PLAYING),
+    settings: () => state.go(SCENE.SETTINGS),
+    toMenu: () => state.go(SCENE.MENU),
+    retry: () => startLevel(currentLevelId),
+    next: () => startLevel(order[order.indexOf(currentLevelId) + 1])
   }
-  pop.burst(player.x + player.width / 2, player.y + player.height / 2);
-  startPop(player);
+});
+
+// Первый уровень, который ещё не пройден. Кнопка «Играть» ведёт именно туда,
+// а не в самое начало — возвращаться в пройденное можно через выбор уровня.
+function nextPlayableId() {
+  const entries = save.levels(order);
+  return (entries.find((entry) => entry.status === 'unlocked') ?? entries[0]).id;
 }
 
-// Возвращает true, если жизни кончились и уровень пора начинать заново.
-function loseLife() {
-  run.lives = Math.max(0, run.lives - 1);
-  return run.lives === 0;
+function startLevel(id) {
+  const level = levelsById.get(id);
+  if (!level) return;
+
+  currentLevelId = id;
+  // Сид уровня лежит в сохранении: пока уровень не пройден, задачи в нём те же.
+  tasks = createTaskEngine({ runSeed: save.seedFor(id) });
+  session = createSession({
+    level,
+    tasks,
+    modal,
+    hud,
+    pop,
+    input,
+    onComplete: (result) => finishLevel(id, result)
+  });
+
+  state.go(SCENE.PLAYING);
 }
 
-async function openChest() {
-  const chest = scene.entities.chestInReach(scene.player);
-  if (!chest || paused) return;
+function finishLevel(id, result) {
+  const { stars, ratio } = save.completeLevel(id, result, order);
+  save.mergeTaskStats(tasks.stats);
 
-  // Сид привязан к месту сундука: вышел из карточки и вернулся — задача та же,
-  // а не свежая с другими числами.
-  const task = tasks.createTask(
-    { subject: chest.subject, grade: chest.grade, difficulty: chest.difficulty },
-    `${level.id}:${chest.column}:${chest.line}`
-  );
-
-  paused = true;
-  input.releaseAll();
-  const outcome = await modal.open(task, tasks);
-  paused = false;
-
-  // Не решил и вышел — сундук остаётся закрытым, к нему можно вернуться.
-  if (!outcome.solved) return;
-
-  chest.opened = true;
-  run.keys.add(chest.keyColor);
-  hud.gainKey(chest.keyColor);
+  overlays.showComplete({
+    ...result,
+    stars,
+    coinsStar: ratio >= 0.8,
+    cleanStar: result.cleanTasks,
+    hasNext: Boolean(order[order.indexOf(id) + 1])
+  });
+  state.go(SCENE.COMPLETE);
 }
 
-function handleEvent(event) {
-  const { player, camera } = scene;
+function onSceneChange(scene) {
+  if (scene !== SCENE.COMPLETE && scene !== SCENE.PAUSED) overlays.hide();
 
-  switch (event.type) {
-    case 'coin':
-      run.coins += 1;
+  switch (scene) {
+    case SCENE.MENU:
+      menu.showMain();
       break;
-
-    case 'checkpoint':
-      // Точка возврата — тайл с флажком: игрок появится на той же земле,
-      // на которой этот флажок и стоит.
-      player.respawnX = event.checkpoint.column * TILE + (TILE - player.width) / 2;
-      player.respawnY = event.checkpoint.line * TILE + TILE - player.height;
+    case SCENE.LEVELS:
+      menu.showLevels();
       break;
-
-    case 'spike':
-      if (player.popTimer > 0) break;
-      pop.burst(player.x + player.width / 2, player.y + player.height / 2);
-      startPop(player);
-      restartAfterPop = loseLife();
+    case SCENE.SETTINGS:
+      menu.showSettings();
       break;
-
-    case 'door-opened':
-      run.finished = true;
+    case SCENE.PAUSED:
+      menu.hide();
+      overlays.showPause();
       break;
-
-    case 'door-locked':
-      // Пока просто нельзя пройти. Подсказка «нужен ключ» — Этап 7.
+    case SCENE.PLAYING:
+      menu.hide();
+      // Клавиши, зажатые до паузы, не должны «доиграть» после возвращения.
+      input.releaseAll();
       break;
-
     default:
+      menu.hide();
       break;
   }
 }
 
 function update(dt) {
-  // Карточка задачи открыта — мир стоит целиком, включая анимации.
-  if (paused) return;
-
-  scene.time += dt;
-  hud.update(dt);
-  pop.update(dt);
-
-  // Уровень пройден: мир замирает, R начинает его заново. Экран победы и
-  // переход на следующий уровень — Этап 5.
-  if (run.finished) {
-    if (input.consumePress('respawn')) startLevel();
-    return;
+  if (input.consumePress('pause')) {
+    if (state.is(SCENE.PLAYING)) state.go(SCENE.PAUSED);
+    else if (state.is(SCENE.PAUSED)) state.go(SCENE.PLAYING);
   }
 
-  if (input.consumePress('respawn')) selfDestruct();
-
-  scene.entities.update(dt);
-  const outcome = updatePlayer(scene.player, input, world, dt);
-
-  if (outcome === 'fell') {
-    if (loseLife()) startLevel();
-    else scene.camera.snapTo(scene.player);
-    return;
-  }
-
-  if (outcome === 'popped') {
-    if (restartAfterPop) startLevel();
-    else scene.camera.snapTo(scene.player);
-    return;
-  }
-
-  if (scene.player.popTimer > 0) {
-    scene.camera.update(scene.player, dt);
-    return;
-  }
-
-  if (input.consumePress('interact')) openChest();
-  for (const event of scene.entities.collide(scene.player, run.keys)) handleEvent(event);
-
-  scene.camera.update(scene.player, dt);
+  if (state.is(SCENE.PLAYING) && session) session.update(dt);
 }
 
 const loop = createLoop({
   update,
-  render: (alpha) => renderer.draw(scene, alpha)
+  // Мир рисуется всегда, даже под меню: экраны полупрозрачные, и за ними видно,
+  // что игра — вот она, а не где-то потом.
+  render: (alpha) => session && renderer.draw(session.scene, alpha)
 });
 
 // ResizeObserver, а не window.resize: он ловит любую смену размеров canvas —
@@ -207,8 +169,15 @@ document.addEventListener('visibilitychange', () => {
 
 renderer.resize();
 
-// Уровень выбирается через ?level=02 — удобно проверять карту, не трогая код.
-const levelId = new URLSearchParams(window.location.search).get('level') ?? '01';
-level = await loadLevel(levelId);
-startLevel();
+// Уровень можно открыть прямо по ссылке: ?level=02 — удобно проверять карту,
+// не проходя игру заново.
+const requested = new URLSearchParams(window.location.search).get('level');
+if (requested && levelsById.has(requested)) {
+  startLevel(requested);
+} else {
+  // Иначе за меню стоит первый доступный уровень — застывшая, но живая сцена.
+  startLevel(nextPlayableId());
+  state.go(SCENE.MENU);
+}
+
 loop.start();

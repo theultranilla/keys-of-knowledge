@@ -1,0 +1,297 @@
+/* Меню, выбор уровня, настройки, пауза и экран после уровня. Один слой поверх
+   игры с разным содержимым. */
+
+.screen {
+  position: fixed;
+  inset: 0;
+  z-index: 10;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 20px;
+  background: rgb(10 14 28 / 92%);
+  overflow-y: auto;
+}
+
+/* Пауза и победа: игра под ними должна оставаться видна — ребёнок помнит,
+   где он остановился. */
+.screen--over {
+  background: rgb(10 14 28 / 72%);
+}
+
+.screen[hidden] {
+  display: none;
+}
+
+.screen__panel {
+  display: flex;
+  flex-direction: column;
+  gap: 18px;
+  width: min(620px, 100%);
+  padding: 32px;
+  border: 2px solid color-mix(in srgb, var(--chalk) 18%, transparent);
+  border-radius: 20px;
+  background: linear-gradient(180deg, var(--sky-mid), var(--sky-deep));
+  box-shadow: 0 30px 70px rgb(0 0 0 / 55%);
+  text-align: center;
+}
+
+.screen__panel--compact {
+  width: min(420px, 100%);
+}
+
+.screen__title {
+  margin: 0;
+  font-family: var(--font-display);
+  font-size: 34px;
+  font-weight: 900;
+  color: var(--chalk);
+}
+
+.screen__subtitle {
+  margin: -8px 0 0;
+  color: color-mix(in srgb, var(--chalk) 70%, transparent);
+}
+
+.screen__actions {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.screen__actions--row {
+  flex-direction: row;
+  flex-wrap: wrap;
+  justify-content: center;
+}
+
+.screen__button {
+  padding: 14px 22px;
+  border: 2px solid color-mix(in srgb, var(--chalk) 28%, transparent);
+  border-radius: 12px;
+  background: transparent;
+  color: var(--chalk);
+  font-family: var(--font-display);
+  font-size: 17px;
+  font-weight: 700;
+  cursor: pointer;
+}
+
+.screen__button--primary {
+  border-color: transparent;
+  background: var(--amber);
+  color: var(--sky-deep);
+}
+
+.screen__button--danger {
+  border-color: var(--coral);
+  color: var(--coral);
+}
+
+.screen__button:focus-visible {
+  outline: 3px solid var(--amber);
+  outline-offset: 3px;
+}
+
+.screen__warning {
+  margin: 0;
+  font-size: 14px;
+  color: var(--coral);
+}
+
+/* --- Выбор уровня --- */
+
+.levels {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(150px, 1fr));
+  gap: 12px;
+}
+
+.level {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  padding: 16px 12px;
+  border: 2px solid color-mix(in srgb, var(--chalk) 22%, transparent);
+  border-radius: 14px;
+  background: rgb(0 0 0 / 20%);
+  color: var(--chalk);
+  font-family: var(--font-text);
+  cursor: pointer;
+  text-align: center;
+}
+
+.level--locked {
+  opacity: 0.45;
+  cursor: not-allowed;
+}
+
+.level--completed {
+  border-color: var(--teal);
+}
+
+.level:not(.level--locked):hover,
+.level:focus-visible {
+  border-color: var(--amber);
+  outline: none;
+}
+
+.level__id {
+  font-family: var(--font-display);
+  font-size: 26px;
+  font-weight: 900;
+  color: var(--amber);
+}
+
+.level__title {
+  font-size: 15px;
+}
+
+.level__stars {
+  font-size: 18px;
+  color: var(--amber);
+  letter-spacing: 2px;
+}
+
+.level__meta {
+  font-size: 13px;
+  color: color-mix(in srgb, var(--chalk) 60%, transparent);
+}
+
+/* --- Настройки --- */
+
+.settings {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.switch {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 12px 14px;
+  border-radius: 12px;
+  background: rgb(0 0 0 / 20%);
+  cursor: pointer;
+  text-align: left;
+}
+
+.switch__input {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  opacity: 0;
+}
+
+.switch__box {
+  flex: 0 0 auto;
+  width: 46px;
+  height: 26px;
+  border: 2px solid color-mix(in srgb, var(--chalk) 35%, transparent);
+  border-radius: 999px;
+  background: rgb(0 0 0 / 30%);
+  transition: background 0.15s ease, border-color 0.15s ease;
+}
+
+.switch__box::after {
+  content: '';
+  display: block;
+  width: 16px;
+  height: 16px;
+  margin: 3px;
+  border-radius: 50%;
+  background: var(--chalk);
+  transition: transform 0.15s ease;
+}
+
+.switch__input:checked + .switch__box {
+  border-color: var(--teal);
+  background: color-mix(in srgb, var(--teal) 35%, transparent);
+}
+
+.switch__input:checked + .switch__box::after {
+  transform: translateX(20px);
+}
+
+.switch__input:focus-visible + .switch__box {
+  outline: 3px solid var(--amber);
+  outline-offset: 2px;
+}
+
+.switch__label {
+  font-size: 17px;
+}
+
+.confirm {
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+}
+
+.confirm__text {
+  margin: 0;
+  font-size: 17px;
+}
+
+/* --- Экран после уровня --- */
+
+.complete__stars {
+  font-size: 44px;
+  letter-spacing: 6px;
+  color: var(--amber);
+}
+
+.earned-list {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  text-align: left;
+}
+
+.earned {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  font-size: 15px;
+}
+
+.earned__mark {
+  font-size: 20px;
+}
+
+.earned--yes {
+  color: var(--chalk);
+}
+
+.earned--yes .earned__mark {
+  color: var(--amber);
+}
+
+.earned--no {
+  color: color-mix(in srgb, var(--chalk) 45%, transparent);
+}
+
+.complete__facts {
+  display: grid;
+  grid-template-columns: auto auto;
+  gap: 4px 18px;
+  justify-content: center;
+  margin: 0;
+  font-size: 16px;
+}
+
+.complete__facts dt {
+  color: color-mix(in srgb, var(--chalk) 65%, transparent);
+  text-align: right;
+}
+
+.complete__facts dd {
+  margin: 0;
+  font-family: var(--font-mono);
+  color: var(--amber);
+  text-align: left;
+}

@@ -8,6 +8,19 @@ import { TILE } from '../engine/constants.js';
 
 const SOLID = new Set(['ground', 'platform']);
 
+// Порядок уровней. Отдельный файл, потому что список файлов в папке из браузера
+// не увидеть, а меню должно знать, какие уровни есть и в каком они порядке.
+export async function loadLevelIndex() {
+  const response = await fetch('./levels/index.json');
+  if (!response.ok) throw new Error(`Список уровней не открылся (HTTP ${response.status})`);
+
+  const data = await response.json();
+  if (!Array.isArray(data?.order) || data.order.length === 0) {
+    throw new Error('levels/index.json: поле order должно быть непустым массивом');
+  }
+  return data.order.map(String);
+}
+
 export async function loadLevel(id) {
   // Путь относительный — игра должна работать из подпапки на GitHub Pages.
   const response = await fetch(`./levels/${id}.json`);

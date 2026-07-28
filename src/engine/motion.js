@@ -10,6 +10,15 @@ query.addEventListener('change', (event) => {
   reduced = event.matches;
 });
 
+// Настройка в игре может включить спокойный режим, даже когда система его не
+// просит. Обратного не бывает: если система просит убрать движение, игра не
+// вправе это перебить.
+let override = false;
+
+export function setReducedMotionOverride(value) {
+  override = Boolean(value);
+}
+
 export function prefersReducedMotion() {
-  return reduced;
+  return reduced || override;
 }
