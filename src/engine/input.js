@@ -19,11 +19,19 @@ const BINDINGS = {
   Escape: 'pause'
 };
 
+// Пока фокус в поле ввода или внутри карточки с задачей, клавиши принадлежат ей,
+// а не игроку: иначе ответ «3» заодно был бы командой игре, а буква R посреди
+// набора отправляла бы персонажа на чекпоинт.
+function isTyping(target) {
+  return target instanceof HTMLElement && target.closest('input, textarea, select, dialog') !== null;
+}
+
 export function createInput(target = window) {
   const held = new Set();
   const pressed = new Set();
 
   function onKeyDown(event) {
+    if (isTyping(event.target)) return;
     const action = BINDINGS[event.code];
     if (!action) return;
     // Иначе Space и стрелки прокрутят страницу под игрой.
@@ -34,6 +42,7 @@ export function createInput(target = window) {
   }
 
   function onKeyUp(event) {
+    if (isTyping(event.target)) return;
     const action = BINDINGS[event.code];
     if (!action) return;
     event.preventDefault();

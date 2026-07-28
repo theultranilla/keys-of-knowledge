@@ -1,0 +1,87 @@
+<!doctype html>
+<html lang="ru">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <meta name="color-scheme" content="dark" />
+    <title>Проверка генераторов задач</title>
+    <style>
+      body {
+        margin: 0;
+        padding: 32px 20px;
+        background: #141b34;
+        color: #e8ecf4;
+        font: 16px/1.5 system-ui, sans-serif;
+      }
+      main { max-width: 760px; margin: 0 auto; }
+      h1 { font-size: 22px; }
+      .verdict { padding: 14px 18px; border-radius: 10px; font-weight: 700; }
+      .verdict--ok { background: rgb(61 191 168 / 18%); color: #3dbfa8; }
+      .verdict--bad { background: rgb(229 97 95 / 18%); color: #e5615f; }
+      table { width: 100%; border-collapse: collapse; margin-top: 20px; }
+      td, th { padding: 7px 10px; text-align: left; border-bottom: 1px solid rgb(232 236 244 / 12%); }
+      .ok { color: #3dbfa8; }
+      .bad { color: #e5615f; }
+      .problem { font-size: 14px; color: #e5615f; }
+      code { font-family: ui-monospace, monospace; }
+    </style>
+  </head>
+  <body>
+    <main>
+      <h1>Проверка генераторов задач</h1>
+      <p>
+        Те же проверки, что и в <code>scripts/verify-tasks.mjs</code>, только запускаются
+        в браузере — на случай, когда Node не установлен.
+      </p>
+      <div id="output">Считаю…</div>
+    </main>
+
+    <script type="module">
+      import { verifyTasks, RUNS_PER_GENERATOR } from './checks.js';
+
+      const output = document.getElementById('output');
+      const report = verifyTasks(RUNS_PER_GENERATOR);
+
+      const verdict = document.createElement('div');
+      verdict.className = `verdict verdict--${report.ok ? 'ok' : 'bad'}`;
+      verdict.textContent = report.ok
+        ? `Всё сошлось: ${report.generators} генераторов по ${RUNS_PER_GENERATOR} прогонов.`
+        : 'Есть расхождения — смотри таблицу.';
+
+      const summary = document.createElement('p');
+      summary.textContent = Object.entries(report.bySubject)
+        .map(([subject, count]) => `${subject}: ${count}`)
+        .join(' · ');
+
+      const table = document.createElement('table');
+      table.innerHTML = '<tr><th>Генератор</th><th>Предмет</th><th>Итог</th></tr>';
+      for (const entry of report.results) {
+        const row = table.insertRow();
+        row.insertCell().textContent = entry.id;
+        row.insertCell().textContent = entry.subject;
+        const cell = row.insertCell();
+        cell.className = entry.problems.length === 0 ? 'ok' : 'bad';
+        cell.textContent = entry.problems.length === 0 ? 'ок' : 'сбой';
+        for (const problem of entry.problems) {
+          const detail = table.insertRow().insertCell();
+          detail.colSpan = 3;
+          detail.className = 'problem';
+          detail.textContent = problem;
+        }
+      }
+
+      output.replaceChildren(verdict, summary, table);
+
+      if (report.rules.length > 0) {
+        const rules = document.createElement('ul');
+        for (const problem of report.rules) {
+          const item = document.createElement('li');
+          item.className = 'problem';
+          item.textContent = problem;
+          rules.append(item);
+        }
+        output.append(rules);
+      }
+    </script>
+  </body>
+</html>

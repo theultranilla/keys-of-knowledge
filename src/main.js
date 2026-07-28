@@ -9,6 +9,8 @@ import { createEntities } from './game/entities.js';
 import { createPop } from './game/pop.js';
 import { loadLevel } from './game/level.js';
 import { createHud } from './ui/hud.js';
+import { createTaskEngine } from './tasks/engine.js';
+import { createTaskModal } from './ui/taskModal.js';
 
 // Бутстрап Этапа 3: уровень грузится из JSON, сущности живут своей жизнью,
 // счётчики висят на HUD. Конечный автомат сцен (меню → уровень → пауза)
@@ -19,6 +21,13 @@ const renderer = createRenderer(canvas);
 const input = createInput();
 const pop = createPop();
 const hud = createHud();
+const modal = createTaskModal();
+// Сид забега: пока живёт только в памяти, поэтому перезагрузка страницы даёт
+// новые числа в задачах. Класть его в сохранение будет Этап 5.
+const tasks = createTaskEngine();
+
+// Пока открыта карточка с задачей, мир замирает целиком.
+let paused = false;
 
 // Ключи и открытые сундуки переживают и смерть, и перезапуск уровня. Это
 // инвариант: наказывать за платформинг потерей учебного прогресса нельзя.
@@ -74,15 +83,28 @@ function loseLife() {
   return run.lives === 0;
 }
 
-function openChest() {
+async function openChest() {
   const chest = scene.entities.chestInReach(scene.player);
-  if (!chest) return;
+  if (!chest || paused) return;
+
+  // Сид привязан к месту сундука: вышел из карточки и вернулся — задача та же,
+  // а не свежая с другими числами.
+  const task = tasks.createTask(
+    { subject: chest.subject, grade: chest.grade, difficulty: chest.difficulty },
+    `${level.id}:${chest.column}:${chest.line}`
+  );
+
+  paused = true;
+  input.releaseAll();
+  const outcome = await modal.open(task, tasks);
+  paused = false;
+
+  // Не решил и вышел — сундук остаётся закрытым, к нему можно вернуться.
+  if (!outcome.solved) return;
 
   chest.opened = true;
   run.keys.add(chest.keyColor);
   hud.gainKey(chest.keyColor);
-  // ЗАГЛУШКА Этапа 3: ключ выдаётся сразу. На Этапе 4 здесь встанет карточка с
-  // задачей, и ключ поедет в руки только после ответа — или после разбора.
 }
 
 function handleEvent(event) {
@@ -121,6 +143,9 @@ function handleEvent(event) {
 }
 
 function update(dt) {
+  // Карточка задачи открыта — мир стоит целиком, включая анимации.
+  if (paused) return;
+
   scene.time += dt;
   hud.update(dt);
   pop.update(dt);
