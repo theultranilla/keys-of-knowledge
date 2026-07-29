@@ -94,6 +94,12 @@ export function createEntities(level) {
     y: (entry.at[1] + 1) * TILE - DOOR_HEIGHT,
     width: DOOR_WIDTH,
     height: DOOR_HEIGHT,
+    // Дверь неподвижна, но физика разбирает её тем же кодом, что и платформы,
+    // а он читает смещение за шаг. Без этих нулей игрок, вставший на дверь,
+    // сдвинулся бы на undefined.
+    deltaX: 0,
+    deltaY: 0,
+    exit: Boolean(entry.exit),
     opened: false
   }));
 
@@ -119,6 +125,10 @@ export function createEntities(level) {
       forward: true
     };
   });
+
+  // Запертая дверь перегораживает проход. Открытая перестаёт быть препятствием,
+  // поэтому уходит из этого списка.
+  const solid = [...platforms, ...doors];
 
   function update(dt) {
     for (const platform of platforms) {
@@ -152,10 +162,16 @@ export function createEntities(level) {
       break; // одной смерти за шаг достаточно
     }
 
+    // Запертая дверь твёрдая, поэтому «коснуться» её можно только вплотную —
+    // проверяем чуть расширенный прямоугольник игрока, иначе касание не
+    // засчитывается никогда.
+    const reach = { x: player.x - 2, y: player.y - 2, width: player.width + 4, height: player.height + 4 };
     for (const door of doors) {
-      if (door.opened || !overlaps(player, door)) continue;
+      if (door.opened || !overlaps(reach, door)) continue;
       if (keys.has(door.keyColor)) {
         door.opened = true;
+        const index = solid.indexOf(door);
+        if (index !== -1) solid.splice(index, 1);
         events.push({ type: 'door-opened', door });
       } else {
         events.push({ type: 'door-locked', door });
@@ -181,9 +197,10 @@ export function createEntities(level) {
     update,
     collide,
     chestInReach,
-    // Платформы твёрдые: физика игрока разбирает их наравне с тайлами.
+    // Платформы и запертые двери твёрдые: физика игрока разбирает их наравне
+    // с тайлами. Список живой — открывшаяся дверь из него уходит.
     get solidBoxes() {
-      return platforms;
+      return solid;
     }
   };
 }

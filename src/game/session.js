@@ -118,7 +118,9 @@ export function createSession({ level, tasks, modal, hud, pop, input, onComplete
         break;
 
       case 'door-opened':
-        complete();
+        // Обычная дверь просто перестаёт мешать. Уровень заканчивает только та,
+        // что помечена в JSON как выход.
+        if (event.door.exit) complete();
         break;
 
       default:

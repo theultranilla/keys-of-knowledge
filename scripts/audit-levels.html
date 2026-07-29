@@ -1,0 +1,100 @@
+<!doctype html>
+<html lang="ru">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <meta name="color-scheme" content="dark" />
+    <title>Аудит уровней</title>
+    <style>
+      body { margin: 0; padding: 32px 20px; background: #141b34; color: #e8ecf4;
+             font: 16px/1.5 system-ui, sans-serif; }
+      main { max-width: 780px; margin: 0 auto; }
+      h1 { font-size: 22px; }
+      .verdict { padding: 14px 18px; border-radius: 10px; font-weight: 700; }
+      .verdict--ok { background: rgb(61 191 168 / 18%); color: #3dbfa8; }
+      .verdict--bad { background: rgb(229 97 95 / 18%); color: #e5615f; }
+      .level { margin-top: 18px; padding: 14px 18px; border-radius: 10px;
+               background: rgb(232 236 244 / 6%); }
+      .level__name { font-weight: 700; }
+      .ok { color: #3dbfa8; }
+      .bad { color: #e5615f; }
+      .notes { margin: 6px 0 0; font-size: 14px; color: rgb(232 236 244 / 65%); }
+      .problem { color: #e5615f; font-size: 15px; }
+      code { font-family: ui-monospace, monospace; }
+    </style>
+  </head>
+  <body>
+    <main>
+      <h1>Аудит уровней</h1>
+      <p>
+        Проверяет каждый уровень из <code>levels/index.json</code>: расстановку сущностей,
+        проходимость от спавна до двери-выхода и площадки, с которых нельзя уйти.
+      </p>
+      <div id="output">Считаю…</div>
+    </main>
+
+    <script type="module">
+      import { loadLevel, loadLevelIndex } from '../src/game/level.js';
+      import { auditLevel } from './audit.js';
+
+      const output = document.getElementById('output');
+      const blocks = [];
+      let allOk = true;
+
+      try {
+        const order = await loadLevelIndex();
+        for (const id of order) {
+          const block = document.createElement('div');
+          block.className = 'level';
+          try {
+            const level = await loadLevel(id);
+            const report = auditLevel(level);
+            const ok = report.problems.length === 0;
+            if (!ok) allOk = false;
+
+            const name = document.createElement('div');
+            name.className = 'level__name';
+            name.textContent = `${report.id} — ${report.title}`;
+            const verdict = document.createElement('span');
+            verdict.className = ok ? 'ok' : 'bad';
+            verdict.textContent = ok ? '  проходится' : '  есть проблемы';
+            name.append(verdict);
+            block.append(name);
+
+            for (const problem of report.problems) {
+              const line = document.createElement('div');
+              line.className = 'problem';
+              line.textContent = problem;
+              block.append(line);
+            }
+
+            const notes = document.createElement('p');
+            notes.className = 'notes';
+            notes.textContent = report.notes.join(' · ');
+            block.append(notes);
+          } catch (error) {
+            allOk = false;
+            block.innerHTML = '';
+            const line = document.createElement('div');
+            line.className = 'problem';
+            line.textContent = `${id}: ${error.message}`;
+            block.append(line);
+          }
+          blocks.push(block);
+        }
+      } catch (error) {
+        allOk = false;
+        const line = document.createElement('div');
+        line.className = 'problem';
+        line.textContent = String(error.message);
+        blocks.push(line);
+      }
+
+      const verdict = document.createElement('div');
+      verdict.className = `verdict verdict--${allOk ? 'ok' : 'bad'}`;
+      verdict.textContent = allOk ? 'Все уровни проходятся.' : 'Есть уровни с проблемами — см. ниже.';
+
+      output.replaceChildren(verdict, ...blocks);
+    </script>
+  </body>
+</html>

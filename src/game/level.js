@@ -8,10 +8,23 @@ import { TILE } from '../engine/constants.js';
 
 const SOLID = new Set(['ground', 'platform']);
 
+// Путь считается от самого модуля, а не от страницы: уровни грузит и игра из
+// корня, и служебные страницы из scripts/. Ссылка при этом остаётся
+// относительной, так что игра работает и из подпапки на GitHub Pages.
+function levelsUrl(file) {
+  return new URL(`../../levels/${file}`, import.meta.url);
+}
+
+// Уровни правятся руками, и правка должна быть видна сразу после перезагрузки.
+// Без этого браузер отдаёт JSON из кэша, автор видит старую карту и ищет ошибку
+// не там. 'no-cache' — это не «не кэшировать», а «каждый раз спрашивать сервер,
+// не изменилось ли»: неизменившийся файл по-прежнему придёт как 304.
+const FETCH_OPTIONS = { cache: 'no-cache' };
+
 // Порядок уровней. Отдельный файл, потому что список файлов в папке из браузера
 // не увидеть, а меню должно знать, какие уровни есть и в каком они порядке.
 export async function loadLevelIndex() {
-  const response = await fetch('./levels/index.json');
+  const response = await fetch(levelsUrl('index.json'), FETCH_OPTIONS);
   if (!response.ok) throw new Error(`Список уровней не открылся (HTTP ${response.status})`);
 
   const data = await response.json();
@@ -22,8 +35,7 @@ export async function loadLevelIndex() {
 }
 
 export async function loadLevel(id) {
-  // Путь относительный — игра должна работать из подпапки на GitHub Pages.
-  const response = await fetch(`./levels/${id}.json`);
+  const response = await fetch(levelsUrl(`${id}.json`), FETCH_OPTIONS);
   if (!response.ok) {
     throw new Error(`Уровень «${id}»: файл не открылся (HTTP ${response.status})`);
   }
@@ -100,6 +112,22 @@ export function parseLevel(data, id = data?.id) {
   checkAnchors(level, level.chests, 'chest', 'chests', where);
   checkAnchors(level, level.doors, 'door', 'doors', where);
   checkPlatforms(level, where);
+
+  // Без двери-выхода уровень нельзя закончить, и это молчаливый тупик —
+  // ловим его при загрузке.
+  if (level.doors.length > 0 && !level.doors.some((door) => door.exit)) {
+    throw new Error(`${where}: ни одна дверь не помечена "exit": true — уровень нечем закончить`);
+  }
+
+  // Ключ, которого не выдаёт ни один сундук, — тоже тупик.
+  const available = new Set(level.chests.map((chest) => chest.keyColor));
+  for (const door of level.doors) {
+    if (!available.has(door.keyColor)) {
+      throw new Error(
+        `${where}: дверь на [${door.at}] просит ключ «${door.keyColor}», но такого не выдаёт ни один сундук`
+      );
+    }
+  }
 
   if (level.isSolid(spawn[0], spawn[1])) {
     throw new Error(`${where}: spawn [${spawn}] стоит внутри твёрдого тайла`);
