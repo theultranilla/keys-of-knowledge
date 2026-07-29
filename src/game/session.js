@@ -10,7 +10,7 @@ import { createEntities } from './entities.js';
 // Сцены, меню и сохранение сюда не заглядывают: забег сообщает наверх одним
 // вызовом onComplete, когда дверь открыта.
 
-export function createSession({ level, tasks, modal, hud, pop, input, onComplete }) {
+export function createSession({ level, tasks, modal, hud, pop, input, audio, onComplete }) {
   const run = { coins: 0, lives: level.lives, keys: new Set(), elapsedMs: 0 };
   // Ключ на руках означает, что задача уже решена: перезапуск уровня не должен
   // возвращать её обратно.
@@ -97,27 +97,32 @@ export function createSession({ level, tasks, modal, hud, pop, input, onComplete
     solvedChests.add(chestKey(chest));
     run.keys.add(chest.keyColor);
     hud.gainKey(chest.keyColor);
+    audio.play('key');
   }
 
   function handleEvent(event) {
     switch (event.type) {
       case 'coin':
         run.coins += 1;
+        audio.play('coin');
         break;
 
       case 'checkpoint':
         player.respawnX = event.checkpoint.column * TILE + (TILE - player.width) / 2;
         player.respawnY = event.checkpoint.line * TILE + TILE - player.height;
+        audio.play('checkpoint');
         break;
 
       case 'spike':
         if (player.popTimer > 0) break;
         pop.burst(player.x + player.width / 2, player.y + player.height / 2);
         startPop(player);
+        audio.play('hurt');
         restartAfterPop = loseLife();
         break;
 
       case 'door-opened':
+        audio.play('door');
         // Обычная дверь просто перестаёт мешать. Уровень заканчивает только та,
         // что помечена в JSON как выход.
         if (event.door.exit) complete();
@@ -131,6 +136,7 @@ export function createSession({ level, tasks, modal, hud, pop, input, onComplete
   function complete() {
     if (finished) return;
     finished = true;
+    audio.play('complete');
 
     const coinsMax = entities.coins.length;
     // Третья звезда: все сундуки уровня открыты и ни один не потребовал разбора.
@@ -151,6 +157,7 @@ export function createSession({ level, tasks, modal, hud, pop, input, onComplete
     entities.update(dt);
 
     const outcome = updatePlayer(player, input, world, dt);
+    if (player.jumpedNow) audio.play('jump');
 
     if (outcome === 'fell') {
       if (loseLife()) build();

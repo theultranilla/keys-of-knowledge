@@ -2,6 +2,7 @@ import { createLoop } from './engine/loop.js';
 import { createInput } from './engine/input.js';
 import { createRenderer } from './engine/renderer.js';
 import { setReducedMotionOverride } from './engine/motion.js';
+import { createAudio } from './engine/audio.js';
 import { createPop } from './game/pop.js';
 import { loadLevel, loadLevelIndex } from './game/level.js';
 import { createSession } from './game/session.js';
@@ -10,6 +11,7 @@ import { createHud } from './ui/hud.js';
 import { createTaskModal } from './ui/taskModal.js';
 import { createMenu } from './ui/menu.js';
 import { createOverlays } from './ui/overlays.js';
+import { createTouchControls } from './ui/touch.js';
 import { createTaskEngine } from './tasks/engine.js';
 import { createSave } from './save.js';
 
@@ -21,10 +23,17 @@ const renderer = createRenderer(canvas);
 const input = createInput();
 const pop = createPop();
 const hud = createHud();
-const modal = createTaskModal();
 const save = createSave();
+const audio = createAudio(save.settings);
+const modal = createTaskModal({ audio });
 
 setReducedMotionOverride(save.settings.reducedMotion);
+
+// Браузер не даст завести звук до действия пользователя. Ловим первое любое —
+// нажатие клавиши, щелчок или касание — и заводим контекст тогда.
+for (const event of ['pointerdown', 'keydown', 'touchstart']) {
+  window.addEventListener(event, () => audio.unlock(), { passive: true });
+}
 
 const order = await loadLevelIndex();
 const levels = await Promise.all(order.map((id) => loadLevel(id)));
@@ -48,10 +57,13 @@ const menu = createMenu({
     setting: (name, value) => {
       save.setSetting(name, value);
       if (name === 'reducedMotion') setReducedMotionOverride(value);
+      else audio.setSetting(name, value);
     },
     reset: () => {
       save.reset();
       setReducedMotionOverride(save.settings.reducedMotion);
+      audio.setSetting('sound', save.settings.sound);
+      audio.setSetting('music', save.settings.music);
     }
   }
 });
@@ -65,6 +77,12 @@ const overlays = createOverlays({
     retry: () => startLevel(currentLevelId),
     next: () => startLevel(order[order.indexOf(currentLevelId) + 1])
   }
+});
+
+const touch = createTouchControls({
+  mount: document.body,
+  input,
+  onPause: () => state.go(SCENE.PAUSED)
 });
 
 // Первый уровень, который ещё не пройден. Кнопка «Играть» ведёт именно туда,
@@ -88,6 +106,7 @@ function startLevel(id) {
     hud,
     pop,
     input,
+    audio,
     onComplete: (result) => finishLevel(id, result)
   });
 
@@ -110,6 +129,7 @@ function finishLevel(id, result) {
 
 function onSceneChange(scene) {
   if (scene !== SCENE.COMPLETE && scene !== SCENE.PAUSED) overlays.hide();
+  touch.setPlaying(scene === SCENE.PLAYING);
 
   switch (scene) {
     case SCENE.MENU:

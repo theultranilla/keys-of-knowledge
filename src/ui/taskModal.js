@@ -9,7 +9,7 @@ import { prefersReducedMotion } from '../engine/motion.js';
 
 const CORRECT_CLOSE_DELAY = 1200;
 
-export function createTaskModal() {
+export function createTaskModal({ audio } = {}) {
   const dialog = document.createElement('dialog');
   dialog.className = 'task';
   dialog.innerHTML = `
@@ -97,6 +97,7 @@ export function createTaskModal() {
     switch (result.status) {
       case 'correct':
         say(t('task.correct'), 'ok');
+        audio?.play('correct');
         finish({ solved: true, usedSolution: false }, CORRECT_CLOSE_DELAY);
         break;
 
@@ -104,6 +105,7 @@ export function createTaskModal() {
         // «Это число не подходит», а не «Ошибка!». Ошибка — часть работы,
         // пугать ею ребёнка незачем.
         say(t('task.wrong'), 'warn');
+        audio?.play('wrong');
         showNote(parts.hint, t('task.hint'), session.task.hint);
         shake();
         updateAttempts();

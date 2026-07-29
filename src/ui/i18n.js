@@ -20,6 +20,12 @@ const ru = {
   'task.not-a-number': 'Нужно число. Дробную часть можно писать через запятую.',
   'task.figure.alt': 'Чертёж к задаче',
 
+  'touch.left': 'Влево',
+  'touch.right': 'Вправо',
+  'touch.jump': 'Прыжок',
+  'touch.interact': 'Открыть сундук',
+  'touch.pause': 'Пауза',
+
   'menu.title': 'Ключи знаний',
   'menu.subtitle': 'Беги, прыгай, решай — и открывай двери',
   'menu.play': 'Играть',

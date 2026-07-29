@@ -1,0 +1,81 @@
+/* Экранное управление. Кнопки крупные и полупрозрачные: попасть пальцем на
+   бегу важнее, чем не закрыть кусок картинки. */
+
+.touch {
+  position: fixed;
+  inset: auto 0 0 0;
+  z-index: 5;
+  display: flex;
+  justify-content: space-between;
+  padding: 16px 18px calc(18px + env(safe-area-inset-bottom));
+  pointer-events: none;
+}
+
+.touch[hidden] {
+  display: none;
+}
+
+.touch__cluster {
+  display: flex;
+  gap: 14px;
+  pointer-events: auto;
+}
+
+.touch__key {
+  /* ТЗ требует не меньше 64×64. Берём с запасом: на бегу палец промахивается. */
+  width: 76px;
+  height: 76px;
+  border: 2px solid color-mix(in srgb, var(--chalk) 40%, transparent);
+  border-radius: 50%;
+  background: rgb(20 27 52 / 55%);
+  color: var(--chalk);
+  font-size: 28px;
+  line-height: 1;
+  touch-action: none;
+  -webkit-user-select: none;
+  user-select: none;
+}
+
+.touch__key--jump {
+  width: 92px;
+  height: 92px;
+  border-color: var(--amber);
+  color: var(--amber);
+}
+
+.touch__key--interact {
+  font-family: var(--font-display);
+  font-weight: 700;
+  border-color: var(--teal);
+  color: var(--teal);
+}
+
+.touch__key--down {
+  background: rgb(232 236 244 / 28%);
+}
+
+.touch__pause {
+  position: fixed;
+  top: calc(12px + env(safe-area-inset-top));
+  right: 14px;
+  z-index: 6;
+  width: 48px;
+  height: 48px;
+  border: 2px solid color-mix(in srgb, var(--chalk) 35%, transparent);
+  border-radius: 12px;
+  background: rgb(20 27 52 / 60%);
+  color: var(--chalk);
+  font-size: 20px;
+  line-height: 1;
+  cursor: pointer;
+}
+
+.touch__pause[hidden] {
+  display: none;
+}
+
+.touch__key:focus-visible,
+.touch__pause:focus-visible {
+  outline: 3px solid var(--amber);
+  outline-offset: 3px;
+}

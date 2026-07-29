@@ -59,6 +59,7 @@ export function createPlayer(spawn) {
 export function updatePlayer(player, input, world, dt) {
   player.previousX = player.x;
   player.previousY = player.y;
+  player.jumpedNow = false;
 
   if (player.popTimer > 0) {
     // Физики на время хлопка нет: осколки летят сами по себе, а игрок ждёт.
@@ -125,6 +126,8 @@ function tryJump(player) {
 
   player.velocityY = -JUMP_SPEED;
   player.isJumping = true;
+  // Флажок на один шаг: по нему сессия понимает, что пора щёлкнуть звуком.
+  player.jumpedNow = true;
   player.onGround = false;
   // Оба окна закрываем сразу, иначе одно нажатие успеет отработать дважды:
   // сначала как буфер, а через кадр — ещё раз внутри койот-времени.

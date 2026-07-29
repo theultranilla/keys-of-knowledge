@@ -72,6 +72,17 @@ export function createInput(target = window) {
       return true;
     },
 
+    // Тот же вход, но снаружи: экранные кнопки нажимают действия напрямую,
+    // не притворяясь клавиатурой.
+    setAction(action, down) {
+      if (down) {
+        held.add(action);
+        pressed.add(action);
+      } else {
+        held.delete(action);
+      }
+    },
+
     releaseAll,
 
     destroy() {
