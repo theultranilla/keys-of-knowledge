@@ -113,10 +113,122 @@ export const collectLikeTerms = {
   }
 };
 
+export const divisionEquation = {
+  id: 'algebra.division.v1',
+  subject: 'algebra',
+  grade: [5, 6],
+  difficulty: 1,
+  generate(rng) {
+    const a = rng.int(2, 9);
+    const b = rng.int(2, 12);
+    const x = a * b;
+
+    return {
+      prompt: `Реши уравнение: x : ${a} = ${b}`,
+      answer: x,
+      type: 'number',
+      unit: null,
+      hint: 'Чтобы найти делимое, умножь частное на делитель.',
+      solution: `x = ${b} · ${a} = ${x}`
+    };
+  }
+};
+
+export const numberRiddle = {
+  id: 'algebra.riddle.v1',
+  subject: 'algebra',
+  grade: [5, 6],
+  difficulty: 2,
+  generate(rng) {
+    const x = rng.int(2, 12);
+    const a = rng.int(2, 6);
+    const b = rng.int(1, 15);
+    const c = a * x + b;
+
+    return {
+      prompt: `Задумали число, умножили на ${a} и прибавили ${b} — получилось ${c}. Какое число задумали?`,
+      answer: x,
+      type: 'number',
+      unit: null,
+      hint: `Разверни действия наоборот: сначала вычти ${b}, потом раздели на ${a}.`,
+      solution: `(${c} − ${b}) : ${a} = ${a * x} : ${a} = ${x}`
+    };
+  }
+};
+
+export const arithmeticMean = {
+  id: 'algebra.mean.v1',
+  subject: 'algebra',
+  grade: [5, 6, 7],
+  difficulty: 2,
+  generate(rng) {
+    const mean = rng.int(4, 20);
+    const spread = rng.int(1, 3);
+    const a = mean - spread;
+    const b = mean;
+    const c = mean + spread;
+
+    return {
+      prompt: `Найди среднее арифметическое чисел ${a}, ${b} и ${c}`,
+      answer: mean,
+      type: 'number',
+      unit: null,
+      hint: 'Сложи все числа и раздели сумму на их количество.',
+      solution: `(${a} + ${b} + ${c}) : 3 = ${a + b + c} : 3 = ${mean}`
+    };
+  }
+};
+
+export const square = {
+  id: 'algebra.square.v1',
+  subject: 'algebra',
+  grade: [5, 6],
+  difficulty: 1,
+  generate(rng) {
+    const a = rng.int(2, 15);
+
+    return {
+      prompt: `Вычисли ${a}²`,
+      answer: a * a,
+      type: 'number',
+      unit: null,
+      hint: 'Вторая степень — это число, умноженное само на себя.',
+      solution: `${a}² = ${a} · ${a} = ${a * a}`
+    };
+  }
+};
+
+export const bracketsEquation = {
+  id: 'algebra.brackets.v1',
+  subject: 'algebra',
+  grade: [6, 7],
+  difficulty: 3,
+  generate(rng) {
+    const a = rng.int(2, 6);
+    const x = rng.int(2, 10);
+    const b = rng.int(1, 9);
+    const c = a * (x + b);
+
+    return {
+      prompt: `Реши уравнение: ${a}(x + ${b}) = ${c}`,
+      answer: x,
+      type: 'number',
+      unit: null,
+      hint: `Раздели обе части на ${a}, потом вычти ${b}.`,
+      solution: `x + ${b} = ${c} : ${a} = ${x + b};  x = ${x + b} − ${b} = ${x}`
+    };
+  }
+};
+
 export const algebraTasks = [
   linearEquation,
   unknownFactor,
   percentOfNumber,
   proportion,
-  collectLikeTerms
+  collectLikeTerms,
+  divisionEquation,
+  numberRiddle,
+  arithmeticMean,
+  square,
+  bracketsEquation
 ];

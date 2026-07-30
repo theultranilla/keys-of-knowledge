@@ -14,6 +14,9 @@ export const KEY_COLORS = {
 // Хитбоксы намеренно меньше тайла: монету приятнее собирать с запасом, а на
 // шипе не должно убивать за касание уголком.
 const COIN_SIZE = 16;
+// Комета — движущийся шип. Хитбокс с запасом, как у обычного шипа: не убивает за
+// касание уголком, а видимая форма совпадает с той, что действительно опасна.
+const HAZARD_SIZE = 22;
 const SPIKE_INSET = 5;
 const SPIKE_TOP = 13;
 const CHEST_WIDTH = 26;
@@ -126,6 +129,43 @@ export function createEntities(level) {
     };
   });
 
+  // Кометы бывают двух повадок. По умолчанию `patrol` — ходят «туда-обратно» тем
+  // же движком, что и платформы (movePlatform). При `mode: "fall"` — падают из
+  // from в to в одну сторону и, дойдя, мгновенно возвращаются в начало: так с неба
+  // сыплется поток. Общего с платформой у обеих: не твёрдые и убивают касанием.
+  const hazards = (level.hazards ?? []).map((entry) => {
+    const mode = entry.mode === 'fall' ? 'fall' : 'patrol';
+    const fromX = entry.from[0] * TILE + (TILE - HAZARD_SIZE) / 2;
+    const fromY = entry.from[1] * TILE + (TILE - HAZARD_SIZE) / 2;
+    const toX = entry.to[0] * TILE + (TILE - HAZARD_SIZE) / 2;
+    const toY = entry.to[1] * TILE + (TILE - HAZARD_SIZE) / 2;
+    const span = Math.hypot(toX - fromX, toY - fromY) || 1;
+    // phase (0..1) сдвигает старт вдоль траектории: дождь комет летит вразнобой,
+    // а не одной стенкой.
+    const progress = ((((entry.phase ?? 0) % 1) + 1) % 1);
+    return {
+      mode,
+      x: fromX + (toX - fromX) * progress,
+      y: fromY + (toY - fromY) * progress,
+      previousX: fromX + (toX - fromX) * progress,
+      previousY: fromY + (toY - fromY) * progress,
+      deltaX: 0,
+      deltaY: 0,
+      width: HAZARD_SIZE,
+      height: HAZARD_SIZE,
+      fromX,
+      fromY,
+      toX,
+      toY,
+      span,
+      travel: progress * span,
+      speed: entry.speed,
+      forward: true,
+      // Собственный сдвиг вращения, чтобы кометы крутились вразнобой.
+      spinOffset: (((entry.from[0] * 7 + entry.from[1] * 13) % 100) / 100) * Math.PI * 2
+    };
+  });
+
   // Запертая дверь перегораживает проход. Открытая перестаёт быть препятствием,
   // поэтому уходит из этого списка.
   const solid = [...platforms, ...doors];
@@ -133,6 +173,10 @@ export function createEntities(level) {
   function update(dt) {
     for (const platform of platforms) {
       movePlatform(platform, dt);
+    }
+    for (const hazard of hazards) {
+      if (hazard.mode === 'fall') moveFalling(hazard, dt);
+      else movePlatform(hazard, dt);
     }
     for (const coin of coins) {
       coin.phase = (coin.phase + dt * 0.6) % 1;
@@ -156,10 +200,21 @@ export function createEntities(level) {
       events.push({ type: 'checkpoint', checkpoint });
     }
 
+    // Шип и комета убивают одинаково — событие одно и то же. Одной смерти за шаг
+    // достаточно, поэтому как только нашли — выходим.
+    let died = false;
     for (const spike of spikes) {
       if (!overlaps(player, spike)) continue;
       events.push({ type: 'spike', spike });
-      break; // одной смерти за шаг достаточно
+      died = true;
+      break;
+    }
+    if (!died) {
+      for (const hazard of hazards) {
+        if (!overlaps(player, hazard)) continue;
+        events.push({ type: 'spike', spike: hazard });
+        break;
+      }
     }
 
     // Запертая дверь твёрдая, поэтому «коснуться» её можно только вплотную —
@@ -190,6 +245,7 @@ export function createEntities(level) {
   return {
     coins,
     spikes,
+    hazards,
     checkpoints,
     chests,
     doors,
@@ -203,6 +259,22 @@ export function createEntities(level) {
       return solid;
     }
   };
+}
+
+// Падающая комета: летит из from в to в одну сторону, дойдя до конца — мгновенно
+// в начало. Хвост считаем по заданному направлению, а не по разнице позиций,
+// иначе в кадре возврата он на миг смотрел бы вверх.
+function moveFalling(hazard, dt) {
+  hazard.previousX = hazard.x;
+  hazard.previousY = hazard.y;
+
+  hazard.travel = (hazard.travel + hazard.speed * dt) % hazard.span;
+  const progress = hazard.travel / hazard.span;
+  hazard.x = hazard.fromX + (hazard.toX - hazard.fromX) * progress;
+  hazard.y = hazard.fromY + (hazard.toY - hazard.fromY) * progress;
+
+  hazard.deltaX = ((hazard.toX - hazard.fromX) / hazard.span) * hazard.speed * dt;
+  hazard.deltaY = ((hazard.toY - hazard.fromY) / hazard.span) * hazard.speed * dt;
 }
 
 function movePlatform(platform, dt) {

@@ -9,6 +9,7 @@ import { KEY_COLORS } from '../game/entities.js';
 export function drawProps(ctx, entities, time) {
   for (const platform of entities.platforms) drawPlatform(ctx, platform);
   for (const spike of entities.spikes) drawSpike(ctx, spike);
+  for (const hazard of entities.hazards) drawHazard(ctx, hazard, time);
   for (const checkpoint of entities.checkpoints) drawCheckpoint(ctx, checkpoint);
   for (const chest of entities.chests) drawChest(ctx, chest);
   for (const door of entities.doors) drawDoor(ctx, door);
@@ -57,6 +58,53 @@ function drawSpike(ctx, spike) {
   ctx.strokeStyle = 'rgba(20, 27, 52, 0.55)';
   ctx.lineWidth = 1.5;
   ctx.stroke();
+}
+
+// Комета — колючая коралловая звезда с хвостом в сторону, обратную движению.
+// Коралл — тот же цвет опасности, что у шипов: danger читается без подписи.
+function drawHazard(ctx, hazard, time) {
+  const cx = hazard.x + hazard.width / 2;
+  const cy = hazard.y + hazard.height / 2;
+  const radius = hazard.width / 2;
+  const spin = prefersReducedMotion() ? (hazard.spinOffset ?? 0) : time * 2.2 + (hazard.spinOffset ?? 0);
+
+  const speed = Math.hypot(hazard.deltaX, hazard.deltaY);
+  if (speed > 0.01) {
+    const tailX = -hazard.deltaX / speed;
+    const tailY = -hazard.deltaY / speed;
+    const gradient = ctx.createLinearGradient(cx, cy, cx + tailX * radius * 3.4, cy + tailY * radius * 3.4);
+    gradient.addColorStop(0, 'rgba(229, 97, 95, 0.45)');
+    gradient.addColorStop(1, 'rgba(229, 97, 95, 0)');
+    ctx.fillStyle = gradient;
+    ctx.beginPath();
+    ctx.moveTo(cx + tailY * radius * 0.7, cy - tailX * radius * 0.7);
+    ctx.lineTo(cx - tailY * radius * 0.7, cy + tailX * radius * 0.7);
+    ctx.lineTo(cx + tailX * radius * 3.4, cy + tailY * radius * 3.4);
+    ctx.closePath();
+    ctx.fill();
+  }
+
+  ctx.beginPath();
+  const points = 8;
+  for (let index = 0; index < points * 2; index++) {
+    const angle = spin + (index * Math.PI) / points;
+    const reach = index % 2 === 0 ? radius : radius * 0.5;
+    const px = cx + Math.cos(angle) * reach;
+    const py = cy + Math.sin(angle) * reach;
+    if (index === 0) ctx.moveTo(px, py);
+    else ctx.lineTo(px, py);
+  }
+  ctx.closePath();
+  ctx.fillStyle = PALETTE.coral;
+  ctx.fill();
+  ctx.strokeStyle = 'rgba(20, 27, 52, 0.55)';
+  ctx.lineWidth = 1.5;
+  ctx.stroke();
+
+  ctx.fillStyle = 'rgba(255, 235, 230, 0.85)';
+  ctx.beginPath();
+  ctx.arc(cx, cy, radius * 0.28, 0, Math.PI * 2);
+  ctx.fill();
 }
 
 function drawCheckpoint(ctx, checkpoint) {

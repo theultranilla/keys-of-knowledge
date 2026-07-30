@@ -26,7 +26,21 @@ export function createTouchControls({ mount, input, onPause }) {
     onClick: onPause
   }, el('span', { 'aria-hidden': 'true', text: '⏸' }));
 
-  mount.append(pad, pause);
+  // Кнопка «застрял». На десктопе для этого есть R, поэтому показываем её, как и
+  // остальные экранные кнопки, только после первого касания. Клик, а не
+  // pointerdown: возврат на чекпоинт — действие нарочно, а не на бегу.
+  const respawn = el('button', {
+    class: 'touch__respawn',
+    type: 'button',
+    hidden: true,
+    'aria-label': t('touch.respawn'),
+    onClick: () => {
+      input.setAction('respawn', true);
+      input.setAction('respawn', false);
+    }
+  }, el('span', { 'aria-hidden': 'true', text: '⟲' }));
+
+  mount.append(pad, pause, respawn);
 
   // Кнопка держит действие, пока палец на ней. Отпустили, увели палец, пришёл
   // системный жест — во всех случаях отжимаем, иначе игрок побежит навсегда.
@@ -63,6 +77,7 @@ export function createTouchControls({ mount, input, onPause }) {
     () => {
       touched = true;
       pad.hidden = !playing;
+      respawn.hidden = !playing;
     },
     { once: true, passive: true }
   );
@@ -72,6 +87,7 @@ export function createTouchControls({ mount, input, onPause }) {
     setPlaying(value) {
       playing = value;
       pad.hidden = !(value && touched);
+      respawn.hidden = !(value && touched);
       pause.hidden = !value;
       if (!value) {
         for (const action of ['left', 'right', 'jump', 'interact']) input.setAction(action, false);

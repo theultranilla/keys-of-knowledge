@@ -13,6 +13,7 @@ import {
   FALL_GRAVITY_MULTIPLIER,
   JUMP_CUT_MULTIPLIER,
   MAX_FALL_SPEED,
+  SPRING_SPEED,
   COYOTE_TIME,
   JUMP_BUFFER_TIME,
   FALL_OUT_MARGIN,
@@ -60,6 +61,7 @@ export function updatePlayer(player, input, world, dt) {
   player.previousX = player.x;
   player.previousY = player.y;
   player.jumpedNow = false;
+  player.sprungNow = false;
 
   if (player.popTimer > 0) {
     // Физики на время хлопка нет: осколки летят сами по себе, а игрок ждёт.
@@ -87,7 +89,31 @@ export function updatePlayer(player, input, world, dt) {
   player.ridingPlatform = contacts.ground;
   if (contacts.below) player.isJumping = false;
 
+  // Приземлился сверху на батут — фиксированный отскок вверх. Проверяем тайл под
+  // ногами, а не коробку: батут — это тайл сетки, а не движущаяся платформа.
+  // Логика живёт здесь, а не в physics.js, потому что это про «ощущение», а не
+  // про разбор столкновений; аудитор гоняет тот же updatePlayer и отскок наследует.
+  if (contacts.below && standingOnSpring(player, world.map)) {
+    player.velocityY = -SPRING_SPEED;
+    player.onGround = false;
+    player.isJumping = false; // подброс не подрезается кнопкой — высота предсказуема
+    player.ridingPlatform = null;
+    player.sprungNow = true; // флажок на один шаг: сессия щёлкнет звуком
+  }
+
   return clampToLevel(player, world.map) ? 'fell' : null;
+}
+
+// Стоит ли игрок хотя бы одной ногой на батуте. После приземления ступни ровно
+// на верхе тайла, поэтому его строка — round((низ игрока) / TILE).
+function standingOnSpring(player, map) {
+  const line = Math.round((player.y + player.height) / TILE);
+  const columnFrom = Math.floor(player.x / TILE);
+  const columnTo = Math.floor((player.x + player.width - 1) / TILE);
+  for (let column = columnFrom; column <= columnTo; column++) {
+    if (map.tileAt(column, line) === 'spring') return true;
+  }
+  return false;
 }
 
 function updateTimers(player, input, dt) {

@@ -64,6 +64,9 @@ export function createAudio(settings = { sound: true, music: true }) {
 
   const voices = {
     jump: () => tone({ from: 300, to: 620, duration: 0.11, gain: 0.22 }),
+    // Батут: длинное «бо-о-инг» вверх — выше и дольше обычного прыжка, чтобы ухо
+    // сразу отличало отскок от него.
+    spring: () => tone({ from: 200, to: 860, type: 'triangle', duration: 0.22, gain: 0.24 }),
     land: () => tone({ from: 180, to: 120, duration: 0.07, gain: 0.12 }),
     coin: () => {
       tone({ from: NOTE.e5, duration: 0.07, gain: 0.2, type: 'square' });

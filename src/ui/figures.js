@@ -28,16 +28,21 @@ export function createFigure(figure) {
 
 const builders = {
   rectangle(svg, { width, height, labelWidth, labelHeight }) {
-    const scale = fit(width, height);
+    // Слева и снизу резервируем место под подписи сторон. Без левого гуттера
+    // подпись высоты у широкого прямоугольника уезжала за край SVG, и от «11 см»
+    // оставалось видно только «см».
+    const GUTTER_LEFT = 58;
+    const GUTTER_BOTTOM = 40;
+    const scale = Math.min((WIDTH - GUTTER_LEFT - PAD) / width, (HEIGHT - PAD - GUTTER_BOTTOM) / height);
     const w = width * scale;
     const h = height * scale;
-    const x = (WIDTH - w) / 2;
-    const y = (HEIGHT - h) / 2 - 6;
+    const x = GUTTER_LEFT + (WIDTH - GUTTER_LEFT - PAD - w) / 2;
+    const y = PAD + (HEIGHT - PAD - GUTTER_BOTTOM - h) / 2;
 
     svg.append(
       element('rect', { x, y, width: w, height: h, class: 'figure__shape' }),
       label(x + w / 2, y + h + 22, labelWidth),
-      label(x - 12, y + h / 2, labelHeight, 'end')
+      label(x - 14, y + h / 2, labelHeight, 'end')
     );
   },
 

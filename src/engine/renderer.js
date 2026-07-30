@@ -44,7 +44,7 @@ export function createRenderer(canvas) {
   }
 
   function draw(scene, alpha) {
-    const { map, player, camera, entities, pop, hud, hudState, time } = scene;
+    const { map, player, camera, entities, pop, hud, hudState, time, springPulses } = scene;
 
     // Камеру интерполируем так же, как игрока: иначе мир дёргался бы ровно на те
     // доли шага, которые мы только что сгладили самому игроку.
@@ -55,7 +55,7 @@ export function createRenderer(canvas) {
 
     ctx.save();
     ctx.translate(-cameraX, -cameraY);
-    drawTiles(ctx, map, cameraX, cameraY);
+    drawTiles(ctx, map, cameraX, cameraY, time, springPulses);
     drawProps(ctx, entities, time);
     // Лопнувшего игрока не рисуем — вместо него на экране осколки.
     if (player.popTimer <= 0) drawPlayer(player, alpha);

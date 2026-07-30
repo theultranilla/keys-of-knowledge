@@ -25,6 +25,7 @@ const ru = {
   'touch.jump': 'Прыжок',
   'touch.interact': 'Открыть сундук',
   'touch.pause': 'Пауза',
+  'touch.respawn': 'Застрял — вернуться на флажок',
 
   'menu.title': 'Ключи знаний',
   'menu.subtitle': 'Беги, прыгай, решай — и открывай двери',

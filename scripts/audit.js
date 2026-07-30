@@ -29,6 +29,19 @@ export function auditLevel(level) {
 
   checkPlacement(level, problems);
 
+  // Монеты собираем той же симуляцией, что и всё остальное: монета достижима,
+  // если хотя бы один разумный прыжок реально её касается на пути, с которого
+  // игрок потом приземляется живым. До монеты, куда можно только упасть в
+  // пропасть или напороться на шип, «не добраться»: собрать её, не потеряв
+  // жизнь, нельзя, а значит и звезду за монеты честно не взять.
+  const coins = createEntities(level).coins.map((coin, index) => ({
+    id: index,
+    column: Math.floor(coin.x / TILE),
+    line: Math.floor(coin.y / TILE),
+    box: { x: coin.x, y: coin.y, width: coin.width, height: coin.height }
+  }));
+  const collected = new Set();
+
   const keys = new Set();
   let spots = new Map();
   let openedChests = new Set();
@@ -36,7 +49,7 @@ export function auditLevel(level) {
   // Ключи открывают новые куски уровня, новые куски дают новые ключи. Крутим
   // до тех пор, пока перестанет добавляться и то, и другое.
   for (let pass = 0; pass <= level.chests.length; pass++) {
-    spots = explore(level, keys);
+    spots = explore(level, keys, coins, collected);
     const before = openedChests.size;
 
     for (const chest of level.chests) {
@@ -65,9 +78,16 @@ export function auditLevel(level) {
     problems.push(`капкан: с площадки [колонка ${Math.round(trap.x / TILE)}, y ${Math.round(trap.y)}] не уйти`);
   }
 
-  const coins = level.rows.join('').split('').filter((symbol) => level.legend[symbol] === 'coin').length;
+  const unreachable = coins.filter((coin) => !collected.has(coin.id));
+  for (const coin of unreachable.slice(0, 5)) {
+    problems.push(`до монеты на [${coin.column},${coin.line}] не добраться`);
+  }
+  if (unreachable.length > 5) {
+    problems.push(`…и ещё ${unreachable.length - 5} недостижимых монет`);
+  }
+
   notes.push(`площадок: ${spots.size}`);
-  notes.push(`монет: ${coins}`);
+  notes.push(`монет достижимо: ${collected.size}/${coins.length}`);
   notes.push(`ключей в обороте: ${[...keys].join(', ') || 'нет'}`);
 
   return { id: level.id, title: level.title, problems, notes };
@@ -79,7 +99,8 @@ function checkPlacement(level, problems) {
   for (let line = 0; line < level.lines; line++) {
     for (let column = 0; column < level.columns; column++) {
       const kind = level.tileAt(column, line);
-      if (kind === 'empty' || kind === 'ground' || kind === 'platform') continue;
+      // ground/platform/spring — сами твёрдые тайлы, это не «сущность в стене».
+      if (kind === 'empty' || kind === 'ground' || kind === 'platform' || kind === 'spring') continue;
       if (level.isSolid(column, line)) problems.push(`«${kind}» на [${column},${line}] внутри твёрдого тайла`);
     }
   }
@@ -105,7 +126,7 @@ function touchesSolid(level, box) {
   return false;
 }
 
-function explore(level, keys) {
+function explore(level, keys, coins = [], collected = new Set()) {
   const spots = new Map();
   const queue = [];
 
@@ -120,7 +141,7 @@ function explore(level, keys) {
     for (const direction of ['left', 'right', null]) {
       for (const jumpAt of JUMP_TIMINGS) {
         for (const hold of HOLD_STEPS) {
-          const landing = simulate(level, keys, spot, direction, jumpAt, hold);
+          const landing = simulate(level, keys, spot, direction, jumpAt, hold, coins, collected);
           if (!landing) continue;
           // Падение за границу уровня — тоже выход: игрок вернётся на чекпоинт.
           if (landing === 'fell') {
@@ -168,7 +189,7 @@ function settle(level, keys, player) {
   return null;
 }
 
-function simulate(level, keys, spot, direction, jumpAt, hold) {
+function simulate(level, keys, spot, direction, jumpAt, hold, coins = [], collected = new Set()) {
   const { entities, world: box } = world(level, keys);
   const player = createPlayer(level.spawn);
   player.x = spot.x;
@@ -184,6 +205,11 @@ function simulate(level, keys, spot, direction, jumpAt, hold) {
     releaseAll: () => held.clear()
   };
 
+  // Монеты, которых коснулись по дороге. Засчитываем их, только если маршрут
+  // закончился живым приземлением: собрать монету и тут же улететь в пропасть
+  // или на шип — не «собрать».
+  const touched = [];
+
   for (let step = 0; step < RUN_STEPS; step++) {
     if (step === jumpAt) {
       held.add('jump');
@@ -193,14 +219,25 @@ function simulate(level, keys, spot, direction, jumpAt, hold) {
 
     entities.update(STEP);
     const outcome = updatePlayer(player, input, box, STEP);
+
+    for (const coin of coins) {
+      if (!collected.has(coin.id) && overlaps(player, coin.box)) touched.push(coin.id);
+    }
+
     if (outcome === 'fell') return 'fell';
 
-    // Шип — это смерть, а не проход: такой маршрут не считается.
+    // Шип и комета — это смерть, а не проход: такой маршрут не считается. Кометы
+    // движутся внутри entities.update, так что здесь у них уже текущие позиции —
+    // аудит честно ищет окно между ними, а не водит игрока сквозь опасность.
     for (const spike of entities.spikes) {
       if (overlaps(player, spike)) return null;
     }
+    for (const hazard of entities.hazards) {
+      if (overlaps(player, hazard)) return null;
+    }
 
     if (player.onGround && step > jumpAt + 3) {
+      for (const id of touched) collected.add(id);
       return { x: player.x, y: player.y };
     }
   }

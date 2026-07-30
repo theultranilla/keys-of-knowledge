@@ -1,6 +1,6 @@
 import { createCamera } from '../engine/camera.js';
 import { prefersReducedMotion } from '../engine/motion.js';
-import { TILE } from '../engine/constants.js';
+import { TILE, SPRING_PULSE_TIME } from '../engine/constants.js';
 import { createPlayer, updatePlayer, startPop, respawn } from './player.js';
 import { createEntities } from './entities.js';
 
@@ -26,7 +26,11 @@ export function createSession({ level, tasks, modal, hud, pop, input, audio, onC
   // Пока открыта карточка с задачей, мир стоит целиком.
   let busy = false;
 
-  const scene = { map: level, player: null, camera: null, entities: null, pop, hud, hudState: run, time: 0 };
+  // Пружины, сработавшие только что: тайл «колонка:строка» → остаток времени
+  // анимации. Рендер по нему рисует сжатие-отскок пада.
+  const springPulses = new Map();
+
+  const scene = { map: level, player: null, camera: null, entities: null, pop, hud, hudState: run, time: 0, springPulses };
 
   function build() {
     entities = createEntities(level);
@@ -43,6 +47,7 @@ export function createSession({ level, tasks, modal, hud, pop, input, audio, onC
     run.lives = level.lives;
     restartAfterPop = false;
     finished = false;
+    springPulses.clear();
 
     scene.entities = entities;
     scene.player = player;
@@ -51,6 +56,15 @@ export function createSession({ level, tasks, modal, hud, pop, input, audio, onC
 
   function chestKey(chest) {
     return `${chest.column}:${chest.line}`;
+  }
+
+  // Гасим анимации пружин: отыгравшую убираем из карты, чтобы она не копилась.
+  function decaySpringPulses(dt) {
+    for (const [tile, remaining] of springPulses) {
+      const next = remaining - dt;
+      if (next <= 0) springPulses.delete(tile);
+      else springPulses.set(tile, next);
+    }
   }
 
   // Игрок сам возвращает себя на чекпоинт. Жизни не стоит: это страховка от
@@ -158,6 +172,13 @@ export function createSession({ level, tasks, modal, hud, pop, input, audio, onC
 
     const outcome = updatePlayer(player, input, world, dt);
     if (player.jumpedNow) audio.play('jump');
+    if (player.sprungNow) {
+      audio.play('spring');
+      const column = Math.floor((player.x + player.width / 2) / TILE);
+      const line = Math.round((player.y + player.height) / TILE);
+      springPulses.set(`${column}:${line}`, SPRING_PULSE_TIME);
+    }
+    decaySpringPulses(dt);
 
     if (outcome === 'fell') {
       if (loseLife()) build();

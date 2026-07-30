@@ -105,10 +105,119 @@ export const mechanicalWork = {
   }
 };
 
+export const timeFromDistance = {
+  id: 'physics.time.v1',
+  subject: 'physics',
+  grade: [6, 7],
+  difficulty: 2,
+  generate(rng) {
+    const speed = rng.int(2, 20);
+    const time = rng.int(2, 12);
+    const distance = speed * time;
+
+    return {
+      prompt: `Автомобиль проехал ${distance} км со скоростью ${speed} км/ч. Сколько времени он был в пути?`,
+      answer: time,
+      type: 'number',
+      unit: 'ч',
+      tolerance: 0.01,
+      hint: 'Время — это путь, делённый на скорость.',
+      solution: `t = s : v = ${distance} : ${speed} = ${time} ч`
+    };
+  }
+};
+
+export const massFromDensity = {
+  id: 'physics.mass.v1',
+  subject: 'physics',
+  grade: [7],
+  difficulty: 2,
+  generate(rng) {
+    const density = rng.pick([2, 3, 5, 7, 8, 11]);
+    const volume = rng.int(2, 12);
+
+    return {
+      prompt: `Плотность вещества ${density} г/см³, объём тела ${volume} см³. Найди массу`,
+      answer: density * volume,
+      type: 'number',
+      unit: 'г',
+      hint: 'Масса — это плотность, умноженная на объём.',
+      solution: `m = ρ · V = ${density} · ${volume} = ${density * volume} г`
+    };
+  }
+};
+
+export const pressure = {
+  id: 'physics.pressure.v1',
+  subject: 'physics',
+  grade: [7],
+  difficulty: 3,
+  generate(rng) {
+    const area = rng.int(2, 8);
+    const value = rng.multiple(100, 900, 50);
+    const force = value * area;
+
+    return {
+      prompt: `Сила ${force} Н давит на площадь ${area} м². Найди давление`,
+      answer: value,
+      type: 'number',
+      unit: 'Па',
+      hint: 'Давление — это сила, делённая на площадь.',
+      solution: `p = F : S = ${force} : ${area} = ${value} Па`
+    };
+  }
+};
+
+export const power = {
+  id: 'physics.power.v1',
+  subject: 'physics',
+  grade: [7],
+  difficulty: 3,
+  generate(rng) {
+    const value = rng.multiple(10, 200, 5);
+    const time = rng.int(2, 12);
+    const work = value * time;
+
+    return {
+      prompt: `За ${time} с совершена работа ${work} Дж. Найди мощность`,
+      answer: value,
+      type: 'number',
+      unit: 'Вт',
+      hint: 'Мощность — это работа, делённая на время.',
+      solution: `N = A : t = ${work} : ${time} = ${value} Вт`
+    };
+  }
+};
+
+export const massFromWeight = {
+  id: 'physics.mass-weight.v1',
+  subject: 'physics',
+  grade: [7],
+  difficulty: 2,
+  generate(rng) {
+    const mass = rng.int(2, 40);
+    const weight = mass * 10;
+
+    return {
+      prompt: `Вес тела ${weight} Н. Найди его массу. Считай, что g = 10 Н/кг`,
+      answer: mass,
+      type: 'number',
+      unit: 'кг',
+      hint: 'Масса — это вес, делённый на g.',
+      solution: `m = F : g = ${weight} : 10 = ${mass} кг`
+    };
+  }
+};
+
 export const physicsTasks = [
   speedFromDistance,
   densityFromMass,
   distanceFromSpeed,
   bodyWeight,
-  mechanicalWork
+  mechanicalWork,
+  timeFromDistance,
+  massFromDensity,
+  pressure,
+  power,
+  massFromWeight
 ];

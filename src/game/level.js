@@ -6,7 +6,9 @@ import { TILE } from '../engine/constants.js';
 // выглядеть как понятная ошибка при загрузке, а не как игрок, проваливающийся
 // сквозь пол через десять минут игры.
 
-const SOLID = new Set(['ground', 'platform']);
+// Батут тоже твёрдый: на нём стоят и с него отталкиваются. Подброс добавляет
+// игрок при приземлении, а сама коллизия — обычная, как с полом.
+const SOLID = new Set(['ground', 'platform', 'spring']);
 
 // Путь считается от самого модуля, а не от страницы: уровни грузит и игра из
 // корня, и служебные страницы из scripts/. Ссылка при этом остаётся
@@ -93,6 +95,7 @@ export function parseLevel(data, id = data?.id) {
     chests: data.chests ?? [],
     doors: data.doors ?? [],
     platforms: data.platforms ?? [],
+    hazards: data.hazards ?? [],
 
     tileAt(column, line) {
       const row = rows[line];
@@ -112,6 +115,7 @@ export function parseLevel(data, id = data?.id) {
   checkAnchors(level, level.chests, 'chest', 'chests', where);
   checkAnchors(level, level.doors, 'door', 'doors', where);
   checkPlatforms(level, where);
+  checkHazards(level, where);
 
   // Без двери-выхода уровень нельзя закончить, и это молчаливый тупик —
   // ловим его при загрузке.
@@ -169,6 +173,25 @@ function checkPlatforms(level, where) {
     }
     if (!(platform.tiles > 0)) {
       throw new Error(`${where}: platforms[${index}].tiles должен быть больше нуля`);
+    }
+  });
+}
+
+// Кометы — движущиеся шипы. Проверяем то же, что у платформ, кроме ширины:
+// размер кометы фиксированный.
+function checkHazards(level, where) {
+  level.hazards.forEach((hazard, index) => {
+    for (const field of ['from', 'to']) {
+      const point = hazard?.[field];
+      if (!Array.isArray(point) || point.length !== 2) {
+        throw new Error(`${where}: hazards[${index}].${field} должен быть парой [колонка, строка]`);
+      }
+    }
+    if (!(hazard.speed > 0)) {
+      throw new Error(`${where}: hazards[${index}].speed должен быть больше нуля`);
+    }
+    if (hazard.mode != null && hazard.mode !== 'patrol' && hazard.mode !== 'fall') {
+      throw new Error(`${where}: hazards[${index}].mode должен быть "patrol" или "fall"`);
     }
   });
 }
