@@ -6,6 +6,7 @@ export const SCENE = {
   MENU: 'menu',
   LEVELS: 'levels',
   SETTINGS: 'settings',
+  WARDROBE: 'wardrobe',
   PLAYING: 'playing',
   PAUSED: 'paused',
   // Открыта карточка с задачей: мир стоит, но это не пауза — выйти из неё

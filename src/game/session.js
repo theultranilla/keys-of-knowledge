@@ -10,7 +10,7 @@ import { createEntities } from './entities.js';
 // Сцены, меню и сохранение сюда не заглядывают: забег сообщает наверх одним
 // вызовом onComplete, когда дверь открыта.
 
-export function createSession({ level, tasks, modal, hud, pop, input, audio, onComplete }) {
+export function createSession({ level, tasks, modal, hud, pop, input, audio, skin, onComplete }) {
   const run = { coins: 0, lives: level.lives, keys: new Set(), elapsedMs: 0 };
   // Ключ на руках означает, что задача уже решена: перезапуск уровня не должен
   // возвращать её обратно.
@@ -30,7 +30,7 @@ export function createSession({ level, tasks, modal, hud, pop, input, audio, onC
   // анимации. Рендер по нему рисует сжатие-отскок пада.
   const springPulses = new Map();
 
-  const scene = { map: level, player: null, camera: null, entities: null, pop, hud, hudState: run, time: 0, springPulses };
+  const scene = { map: level, player: null, camera: null, entities: null, pop, hud, hudState: run, time: 0, springPulses, skin };
 
   function build() {
     entities = createEntities(level);
@@ -208,6 +208,10 @@ export function createSession({ level, tasks, modal, hud, pop, input, audio, onC
   return {
     scene,
     update,
+    // Смена скина в гардеробе перекрашивает героя и в уже идущей сцене.
+    setSkin(next) {
+      scene.skin = next;
+    },
     restart() {
       run.keys.clear();
       solvedChests.clear();

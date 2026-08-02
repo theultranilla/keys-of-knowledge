@@ -1,5 +1,7 @@
 import { el, button } from './dom.js';
 import { t } from './i18n.js';
+import { drawCharacter } from '../engine/character.js';
+import { CATEGORIES, itemsByCategory } from '../game/skins.js';
 
 // Главное меню, выбор уровня и настройки. Все три — один и тот же слой поверх
 // canvas, просто с разным содержимым: так между ними нельзя оказаться нигде.
@@ -36,6 +38,7 @@ export function createMenu({ mount, save, levels, on }) {
         { class: 'screen__actions' },
         button('screen__button screen__button--primary', t('menu.play'), on.play),
         button('screen__button', t('menu.levels'), () => on.levels()),
+        button('screen__button', t('menu.wardrobe'), () => on.wardrobe()),
         button('screen__button', t('menu.settings'), () => on.settings())
       ),
       warning()
@@ -109,6 +112,72 @@ export function createMenu({ mount, save, levels, on }) {
     panel.querySelector('button')?.focus();
   }
 
+  // --- Гардероб ---
+
+  // Мини-превью персонажа на canvas. Тот же drawCharacter, что и в игре, поэтому
+  // предмет в магазине выглядит ровно так, как потом на уровне. Сверху оставляем
+  // место под шапку — она рисуется выше макушки.
+  function characterCanvas(skin, size) {
+    const canvas = el('canvas', { class: 'wardrobe__preview', width: size, height: size });
+    const ctx = canvas.getContext('2d');
+    const h = size * 0.55;
+    const w = h * (22 / 30);
+    drawCharacter(ctx, (size - w) / 2, size * 0.38, w, h, skin, 1);
+    return canvas;
+  }
+
+  function itemCard(item) {
+    const equipped = save.equipped[item.category] === item.id;
+    const owned = save.owns(item.id);
+    // Превью — текущий набор, но с этим предметом: «как я буду выглядеть».
+    const previewSkin = { ...save.equipped, [item.category]: item.id };
+
+    let control;
+    if (equipped) {
+      control = el('span', { class: 'wardrobe__badge', text: t('wardrobe.equipped') });
+    } else if (owned) {
+      control = button('wardrobe__act', t('wardrobe.equip'), () => {
+        save.equip(item.id);
+        on.skinChanged?.(save.equipped);
+        show(wardrobeScreen);
+      });
+    } else if (save.balance >= item.price) {
+      control = button('wardrobe__act wardrobe__act--buy', t('wardrobe.buy', { price: item.price }), () => {
+        // Купил — сразу надел: ребёнок хочет увидеть обновку немедленно.
+        if (save.buy(item.id)) {
+          save.equip(item.id);
+          on.skinChanged?.(save.equipped);
+        }
+        show(wardrobeScreen);
+      });
+    } else {
+      control = el('span', { class: 'wardrobe__price', text: t('wardrobe.noMoney', { price: item.price }) });
+    }
+
+    return el('div', { class: `wardrobe__item${equipped ? ' wardrobe__item--on' : ''}` },
+      characterCanvas(previewSkin, 56),
+      el('span', { class: 'wardrobe__name', text: item.name }),
+      control);
+  }
+
+  function wardrobeScreen() {
+    const sections = CATEGORIES.map((category) =>
+      el('div', { class: 'wardrobe__section' },
+        el('h3', { class: 'wardrobe__cat', text: t(`wardrobe.cat.${category}`) }),
+        el('div', { class: 'wardrobe__grid' }, itemsByCategory(category).map(itemCard)))
+    );
+
+    return [
+      el('h2', { class: 'screen__title', text: t('wardrobe.title') }),
+      el('div', { class: 'wardrobe__wallet', text: t('wardrobe.balance', { coins: save.balance }) }),
+      characterCanvas(save.equipped, 104),
+      el('p', { class: 'wardrobe__hint', text: t('wardrobe.hint') }),
+      el('div', { class: 'wardrobe' }, sections),
+      button('screen__button', t('menu.back'), () => on.back()),
+      warning()
+    ];
+  }
+
   function toggle(name, checked, onChange) {
     const input = el('input', { type: 'checkbox', class: 'switch__input', id: `set-${name}` });
     input.checked = Boolean(checked);
@@ -123,6 +192,7 @@ export function createMenu({ mount, save, levels, on }) {
   return {
     showMain: () => show(mainScreen),
     showLevels: () => show(levelsScreen),
+    showWardrobe: () => show(wardrobeScreen),
     showSettings: () => show(settingsScreen),
     hide
   };

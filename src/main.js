@@ -51,9 +51,12 @@ const menu = createMenu({
   on: {
     play: () => startLevel(nextPlayableId()),
     levels: () => state.go(SCENE.LEVELS),
+    wardrobe: () => state.go(SCENE.WARDROBE),
     settings: () => state.go(SCENE.SETTINGS),
     back: () => state.go(state.previous === SCENE.PAUSED ? SCENE.PAUSED : SCENE.MENU),
     pick: (id) => startLevel(id),
+    // Надел вещь в гардеробе — сразу перекрашиваем героя в застывшей сцене за меню.
+    skinChanged: (equipped) => session?.setSkin(equipped),
     setting: (name, value) => {
       save.setSetting(name, value);
       if (name === 'reducedMotion') setReducedMotionOverride(value);
@@ -107,6 +110,7 @@ function startLevel(id) {
     pop,
     input,
     audio,
+    skin: save.equipped,
     onComplete: (result) => finishLevel(id, result)
   });
 
@@ -137,6 +141,9 @@ function onSceneChange(scene) {
       break;
     case SCENE.LEVELS:
       menu.showLevels();
+      break;
+    case SCENE.WARDROBE:
+      menu.showWardrobe();
       break;
     case SCENE.SETTINGS:
       menu.showSettings();

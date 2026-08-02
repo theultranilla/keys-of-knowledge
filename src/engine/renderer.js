@@ -1,8 +1,9 @@
 import { createBackground } from './background.js';
 import { drawTiles } from './tiles.js';
 import { drawProps } from './props.js';
-import { roundedRect } from './shapes.js';
+import { drawCharacter } from './character.js';
 import { VIEW_WIDTH, VIEW_HEIGHT, PALETTE } from './constants.js';
+import { DEFAULT_SKIN } from '../game/skins.js';
 
 // Композитор кадра: небо, тайлы, сущности, игрок, осколки, HUD. Сам рисует
 // только игрока и осколки — всё остальное умеют профильные модули.
@@ -44,7 +45,7 @@ export function createRenderer(canvas) {
   }
 
   function draw(scene, alpha) {
-    const { map, player, camera, entities, pop, hud, hudState, time, springPulses } = scene;
+    const { map, player, camera, entities, pop, hud, hudState, time, springPulses, skin } = scene;
 
     // Камеру интерполируем так же, как игрока: иначе мир дёргался бы ровно на те
     // доли шага, которые мы только что сгладили самому игроку.
@@ -58,7 +59,7 @@ export function createRenderer(canvas) {
     drawTiles(ctx, map, cameraX, cameraY, time, springPulses);
     drawProps(ctx, entities, time);
     // Лопнувшего игрока не рисуем — вместо него на экране осколки.
-    if (player.popTimer <= 0) drawPlayer(player, alpha);
+    if (player.popTimer <= 0) drawPlayer(player, alpha, skin);
     drawPop(pop);
     ctx.restore();
 
@@ -93,26 +94,13 @@ export function createRenderer(canvas) {
     ctx.globalAlpha = 1;
   }
 
-  function drawPlayer(player, alpha) {
+  function drawPlayer(player, alpha, skin) {
     // Интерполяция между прошлым и текущим шагом симуляции: без неё на мониторе
     // со 144 Гц движение выглядело бы рублеными ступеньками.
     const x = lerp(player.previousX, player.x, alpha);
     const y = lerp(player.previousY, player.y, alpha);
 
-    ctx.fillStyle = PALETTE.chalk;
-    roundedRect(ctx, x, y, player.width, player.height, 6);
-    ctx.fill();
-
-    // Янтарный фонарик смотрит туда же, куда бежит игрок.
-    ctx.fillStyle = PALETTE.amber;
-    const lampX = player.facing > 0 ? x + player.width - 8 : x + 2;
-    roundedRect(ctx, lampX, y + 7, 6, 6, 2);
-    ctx.fill();
-
-    ctx.fillStyle = PALETTE.skyDeep;
-    const eyeX = player.facing > 0 ? x + 12 : x + 6;
-    ctx.fillRect(eyeX, y + 8, 3, 4);
-    ctx.fillRect(eyeX - 5, y + 8, 3, 4);
+    drawCharacter(ctx, x, y, player.width, player.height, skin ?? DEFAULT_SKIN, player.facing);
   }
 
   return { resize, draw };

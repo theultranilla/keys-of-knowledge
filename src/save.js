@@ -5,6 +5,8 @@
 // записи, а в некоторых браузерах доступ к нему падает ещё на чтении свойства.
 // Игра в такой ситуации обязана просто работать без сохранения.
 
+import { FREE_ITEMS, DEFAULT_SKIN, COSMETICS_BY_ID } from './game/skins.js';
+
 export const SAVE_KEY = 'keysofknowledge.save.v1';
 export const SAVE_VERSION = 1;
 
@@ -141,6 +143,44 @@ export function createSave() {
       persist();
     },
 
+    // --- Гардероб ---
+
+    // Монеты, доступные к трате: заработано минус потрачено.
+    get balance() {
+      return Math.max(0, (data.player.coinsTotal ?? 0) - (data.player.coinsSpent ?? 0));
+    },
+
+    get equipped() {
+      return data.wardrobe.equipped;
+    },
+
+    owns(id) {
+      return data.wardrobe.owned.includes(id);
+    },
+
+    // Покупка: списывает цену и заносит предмет в купленное. Возвращает true, если
+    // получилось (или предмет уже был). Надевать при этом сам не берётся.
+    buy(id) {
+      const item = COSMETICS_BY_ID.get(id);
+      if (!item) return false;
+      if (data.wardrobe.owned.includes(id)) return true;
+      if (this.balance < item.price) return false;
+
+      data.player.coinsSpent = (data.player.coinsSpent ?? 0) + item.price;
+      data.wardrobe.owned.push(id);
+      persist();
+      return true;
+    },
+
+    // Надеть купленный предмет в его категорию.
+    equip(id) {
+      const item = COSMETICS_BY_ID.get(id);
+      if (!item || !data.wardrobe.owned.includes(id)) return false;
+      data.wardrobe.equipped[item.category] = id;
+      persist();
+      return true;
+    },
+
     reset() {
       data = createDefaults();
       try {
@@ -156,10 +196,14 @@ export function createSave() {
 function createDefaults() {
   return {
     version: SAVE_VERSION,
-    player: { name: null, coinsTotal: 0 },
+    // coinsTotal — всего заработано за всё время, coinsSpent — потрачено в
+    // гардеробе. Баланс к трате = разница. Так «всего собрано» остаётся честной
+    // статистикой, а покупки её не обнуляют.
+    player: { name: null, coinsTotal: 0, coinsSpent: 0 },
     levels: {},
     tasks: {},
-    settings: { sound: true, music: true, reducedMotion: false }
+    settings: { sound: true, music: true, reducedMotion: false },
+    wardrobe: { owned: [...FREE_ITEMS], equipped: { ...DEFAULT_SKIN } }
   };
 }
 
@@ -176,6 +220,12 @@ function migrate(raw) {
     player: { ...fresh.player, ...raw.player },
     levels: raw.levels ?? {},
     tasks: raw.tasks ?? {},
-    settings: { ...fresh.settings, ...raw.settings }
+    settings: { ...fresh.settings, ...raw.settings },
+    // Гардероб появился позже: у старых сейвов его нет — подставляем дефолт.
+    // Бесплатные предметы всегда в списке купленного, даже если сейв постарше.
+    wardrobe: {
+      owned: [...new Set([...FREE_ITEMS, ...(raw.wardrobe?.owned ?? [])])],
+      equipped: { ...DEFAULT_SKIN, ...(raw.wardrobe?.equipped ?? {}) }
+    }
   };
 }
