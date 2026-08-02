@@ -14,11 +14,17 @@ export const KEY_COLORS = {
 // Хитбоксы намеренно меньше тайла: монету приятнее собирать с запасом, а на
 // шипе не должно убивать за касание уголком.
 const COIN_SIZE = 16;
-// Комета — движущийся шип. Хитбокс с запасом, как у обычного шипа: не убивает за
-// касание уголком, а видимая форма совпадает с той, что действительно опасна.
-const HAZARD_SIZE = 22;
-const SPIKE_INSET = 5;
-const SPIKE_TOP = 13;
+// Комета — движущийся шип. Хитбокс — маленькое ядро, а рисуется звезда крупнее:
+// умираешь, когда влетел в тело, а не когда задел кончик луча или пустой угол
+// прямоугольника вокруг звезды.
+const HAZARD_HIT = 15;
+const HAZARD_VISUAL = 24;
+// У шипа то же расхождение: зубья рисуем почти во весь тайл, но убивает только
+// центральная нижняя часть — там, где зубья сплошные, а не пустые углы коробки.
+const SPIKE_HIT_INSET = 9;
+const SPIKE_HIT_TOP = 18;
+const SPIKE_VIS_INSET = 5;
+const SPIKE_VIS_TOP = 13;
 const CHEST_WIDTH = 26;
 const CHEST_HEIGHT = 22;
 const DOOR_WIDTH = 26;
@@ -51,10 +57,16 @@ export function createEntities(level) {
           break;
         case 'spike':
           spikes.push({
-            x: x + SPIKE_INSET,
-            y: y + SPIKE_TOP,
-            width: TILE - SPIKE_INSET * 2,
-            height: TILE - SPIKE_TOP,
+            // Хитбокс — уже картинки: убивает центральная нижняя часть зубьев.
+            x: x + SPIKE_HIT_INSET,
+            y: y + SPIKE_HIT_TOP,
+            width: TILE - SPIKE_HIT_INSET * 2,
+            height: TILE - SPIKE_HIT_TOP,
+            // Что рисуем — крупнее, во всю привычную ширину зубьев.
+            drawX: x + SPIKE_VIS_INSET,
+            drawY: y + SPIKE_VIS_TOP,
+            drawWidth: TILE - SPIKE_VIS_INSET * 2,
+            drawHeight: TILE - SPIKE_VIS_TOP,
             column,
             line
           });
@@ -135,10 +147,10 @@ export function createEntities(level) {
   // сыплется поток. Общего с платформой у обеих: не твёрдые и убивают касанием.
   const hazards = (level.hazards ?? []).map((entry) => {
     const mode = entry.mode === 'fall' ? 'fall' : 'patrol';
-    const fromX = entry.from[0] * TILE + (TILE - HAZARD_SIZE) / 2;
-    const fromY = entry.from[1] * TILE + (TILE - HAZARD_SIZE) / 2;
-    const toX = entry.to[0] * TILE + (TILE - HAZARD_SIZE) / 2;
-    const toY = entry.to[1] * TILE + (TILE - HAZARD_SIZE) / 2;
+    const fromX = entry.from[0] * TILE + (TILE - HAZARD_HIT) / 2;
+    const fromY = entry.from[1] * TILE + (TILE - HAZARD_HIT) / 2;
+    const toX = entry.to[0] * TILE + (TILE - HAZARD_HIT) / 2;
+    const toY = entry.to[1] * TILE + (TILE - HAZARD_HIT) / 2;
     const span = Math.hypot(toX - fromX, toY - fromY) || 1;
     // phase (0..1) сдвигает старт вдоль траектории: дождь комет летит вразнобой,
     // а не одной стенкой.
@@ -151,8 +163,10 @@ export function createEntities(level) {
       previousY: fromY + (toY - fromY) * progress,
       deltaX: 0,
       deltaY: 0,
-      width: HAZARD_SIZE,
-      height: HAZARD_SIZE,
+      width: HAZARD_HIT,
+      height: HAZARD_HIT,
+      // Рисуется крупнее хитбокса — лучи звезды выходят за пределы опасной зоны.
+      visualRadius: HAZARD_VISUAL / 2,
       fromX,
       fromY,
       toX,

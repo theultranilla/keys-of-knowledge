@@ -39,18 +39,22 @@ function drawPlatform(ctx, platform) {
 }
 
 function drawSpike(ctx, spike) {
-  // Шип занимает не весь тайл, поэтому рисуем от его собственной коробки —
-  // видимая форма совпадает с той, что действительно убивает.
+  // Рисуем от отдельной, более крупной коробки, а не от хитбокса: зубья выглядят
+  // во всю ширину, но убивает только их центральная нижняя часть.
   const teeth = 3;
-  const step = spike.width / teeth;
+  const baseX = spike.drawX ?? spike.x;
+  const baseY = spike.drawY ?? spike.y;
+  const drawWidth = spike.drawWidth ?? spike.width;
+  const drawHeight = spike.drawHeight ?? spike.height;
+  const step = drawWidth / teeth;
 
   ctx.fillStyle = PALETTE.coral;
   ctx.beginPath();
   for (let index = 0; index < teeth; index++) {
-    const left = spike.x + index * step;
-    ctx.moveTo(left, spike.y + spike.height);
-    ctx.lineTo(left + step / 2, spike.y);
-    ctx.lineTo(left + step, spike.y + spike.height);
+    const left = baseX + index * step;
+    ctx.moveTo(left, baseY + drawHeight);
+    ctx.lineTo(left + step / 2, baseY);
+    ctx.lineTo(left + step, baseY + drawHeight);
   }
   ctx.closePath();
   ctx.fill();
@@ -65,7 +69,7 @@ function drawSpike(ctx, spike) {
 function drawHazard(ctx, hazard, time) {
   const cx = hazard.x + hazard.width / 2;
   const cy = hazard.y + hazard.height / 2;
-  const radius = hazard.width / 2;
+  const radius = hazard.visualRadius ?? hazard.width / 2;
   const spin = prefersReducedMotion() ? (hazard.spinOffset ?? 0) : time * 2.2 + (hazard.spinOffset ?? 0);
 
   const speed = Math.hypot(hazard.deltaX, hazard.deltaY);

@@ -104,16 +104,14 @@ export function updatePlayer(player, input, world, dt) {
   return clampToLevel(player, world.map) ? 'fell' : null;
 }
 
-// Стоит ли игрок хотя бы одной ногой на батуте. После приземления ступни ровно
-// на верхе тайла, поэтому его строка — round((низ игрока) / TILE).
+// Стоит ли игрок на батуте. Проверяем тайл под ЦЕНТРОМ игрока, а не под всей
+// шириной: иначе батут срабатывал, стоило краем заехать на соседний тайл-пружину,
+// хотя игрок на неё и не вставал — «огромный радиус». После приземления ступни
+// ровно на верхе тайла, поэтому его строка — round((низ игрока) / TILE).
 function standingOnSpring(player, map) {
   const line = Math.round((player.y + player.height) / TILE);
-  const columnFrom = Math.floor(player.x / TILE);
-  const columnTo = Math.floor((player.x + player.width - 1) / TILE);
-  for (let column = columnFrom; column <= columnTo; column++) {
-    if (map.tileAt(column, line) === 'spring') return true;
-  }
-  return false;
+  const column = Math.floor((player.x + player.width / 2) / TILE);
+  return map.tileAt(column, line) === 'spring';
 }
 
 function updateTimers(player, input, dt) {
