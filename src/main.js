@@ -211,6 +211,13 @@ if (params.has('test')) {
     startLevel(nextPlayableId());
     state.go(SCENE.MENU);
   }
+  // Из сыгранной карты можно вернуться в редактор и поправить.
+  const back = document.createElement('button');
+  back.className = 'editor-back';
+  back.type = 'button';
+  back.textContent = '← В редактор';
+  back.addEventListener('click', () => { window.location.href = 'scripts/level-editor.html'; });
+  document.body.append(back);
 } else if (requested && levelsById.has(requested)) {
   startLevel(requested);
 } else {

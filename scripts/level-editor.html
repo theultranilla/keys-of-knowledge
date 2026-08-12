@@ -336,7 +336,7 @@
       }
       canvas.addEventListener('pointerdown', (e) => { painting = true; canvas.setPointerCapture(e.pointerId); paint(...cellFromEvent(e)); });
       canvas.addEventListener('pointermove', (e) => { if (painting) paint(...cellFromEvent(e)); });
-      canvas.addEventListener('pointerup', () => { painting = false; });
+      canvas.addEventListener('pointerup', () => { painting = false; autosave(); });
       canvas.addEventListener('pointercancel', () => { painting = false; });
 
       // --- Инструменты ---
@@ -468,9 +468,13 @@
       $('testBtn').addEventListener('click', () => {
         try { parseLevel(structuredClone(toLevel())); }
         catch (e) { alert('Сначала поправь, чтобы играть:\n' + e.message); return; }
-        try { localStorage.setItem('keysofknowledge.testlevel', JSON.stringify(toLevel())); }
-        catch (e) { alert('Не удалось сохранить карту для теста: ' + e.message); return; }
-        window.open('../index.html?test=1', '_blank');
+        try {
+          localStorage.setItem('keysofknowledge.testlevel', JSON.stringify(toLevel()));
+          autosave();
+        } catch (e) { alert('Не удалось сохранить карту для теста: ' + e.message); return; }
+        // Та же вкладка: в игре будет кнопка «← В редактор», а карта восстановится
+        // из автосохранения. Надёжнее новой вкладки, которую легко потерять.
+        location.href = '../index.html?test=1';
       });
       $('addPlatform').addEventListener('click', () => {
         state.platforms.push({ from: [Number($('pfx').value), Number($('pfy').value)],
@@ -486,9 +490,25 @@
         state.hazards.push(h); renderLists(); draw();
       });
 
+      // Автосохранение рабочей карты. Чтобы переход в «Тест» и обратно не терял
+      // нарисованное: пишем при изменениях, читаем при загрузке.
+      function autosave() {
+        try { localStorage.setItem('keysofknowledge.editor.autosave', JSON.stringify(toLevel())); } catch (e) {}
+      }
+      function restore() {
+        try {
+          const raw = localStorage.getItem('keysofknowledge.editor.autosave');
+          if (!raw) return false;
+          $('json').value = raw;
+          importJson();
+          $('json').value = '';
+          return true;
+        } catch (e) { return false; }
+      }
+
       // Старт.
-      state.grid = blankGrid(state.cols, state.rows);
       buildTools();
+      if (!restore()) state.grid = blankGrid(state.cols, state.rows);
       renderLists();
       draw();
     </script>

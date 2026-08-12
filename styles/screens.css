@@ -234,6 +234,29 @@
   font-size: 17px;
 }
 
+/* Кнопка возврата в редактор — только в тест-режиме карты. */
+.editor-back {
+  position: fixed;
+  top: calc(12px + env(safe-area-inset-top));
+  left: 50%;
+  transform: translateX(-50%);
+  z-index: 20;
+  padding: 8px 14px;
+  border: 2px solid var(--teal);
+  border-radius: 10px;
+  background: rgb(20 27 52 / 85%);
+  color: var(--teal);
+  font-family: var(--font-display);
+  font-weight: 700;
+  font-size: 14px;
+  cursor: pointer;
+}
+
+.editor-back:focus-visible {
+  outline: 3px solid var(--amber);
+  outline-offset: 2px;
+}
+
 /* --- Гардероб --- */
 
 .wardrobe__wallet {
