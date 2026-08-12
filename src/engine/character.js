@@ -89,14 +89,18 @@ function drawHat(ctx, x, y, w, h, hat, facing) {
       break;
     }
     case 'cap': {
+      // Купол.
       ctx.beginPath();
-      ctx.moveTo(x + w * 0.12, brimY);
-      ctx.quadraticCurveTo(centerX, y - h * 0.18, x + w * 0.88, brimY);
+      ctx.moveTo(x + w * 0.15, brimY);
+      ctx.quadraticCurveTo(centerX, y - h * 0.2, x + w * 0.85, brimY);
       ctx.closePath();
       ctx.fill();
-      // Козырёк в сторону движения.
-      const peakX = facing > 0 ? x + w * 0.55 : x - w * 0.05;
-      ctx.fillRect(peakX, brimY - unit, w * 0.5, 3 * unit);
+      // Козырёк — тонкая планка у основания купола, выступает вперёд по ходу бега.
+      const brimThickness = Math.max(2, 2.5 * unit);
+      const brimWidth = w * 0.62;
+      const brimX = facing > 0 ? centerX - w * 0.05 : centerX - brimWidth + w * 0.05;
+      roundedRect(ctx, brimX, brimY - brimThickness * 0.5, brimWidth, brimThickness, brimThickness * 0.4);
+      ctx.fill();
       break;
     }
     case 'wizard': {
