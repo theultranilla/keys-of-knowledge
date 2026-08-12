@@ -4,7 +4,7 @@ import { createRenderer } from './engine/renderer.js';
 import { setReducedMotionOverride } from './engine/motion.js';
 import { createAudio } from './engine/audio.js';
 import { createPop } from './game/pop.js';
-import { loadLevel, loadLevelIndex } from './game/level.js';
+import { loadLevel, loadLevelIndex, parseLevel } from './game/level.js';
 import { createSession } from './game/session.js';
 import { createState, SCENE } from './game/state.js';
 import { createHud } from './ui/hud.js';
@@ -196,9 +196,22 @@ document.addEventListener('visibilitychange', () => {
 renderer.resize();
 
 // Уровень можно открыть прямо по ссылке: ?level=02 — удобно проверять карту,
-// не проходя игру заново.
-const requested = new URLSearchParams(window.location.search).get('level');
-if (requested && levelsById.has(requested)) {
+// не проходя игру заново. А ?test=1 запускает уровень, который редактор карт
+// положил в localStorage: кнопка «Тест» открывает игру именно так.
+const params = new URLSearchParams(window.location.search);
+const requested = params.get('level');
+
+if (params.has('test')) {
+  try {
+    const level = parseLevel(JSON.parse(localStorage.getItem('keysofknowledge.testlevel')));
+    levelsById.set(level.id, level);
+    startLevel(level.id);
+  } catch (error) {
+    console.error('Тест-уровень не загрузился:', error);
+    startLevel(nextPlayableId());
+    state.go(SCENE.MENU);
+  }
+} else if (requested && levelsById.has(requested)) {
   startLevel(requested);
 } else {
   // Иначе за меню стоит первый доступный уровень — застывшая, но живая сцена.

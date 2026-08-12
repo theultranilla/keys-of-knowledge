@@ -55,7 +55,8 @@
       <div>
         <div class="panel">
           <h1>Редактор уровней</h1>
-          <p class="hint">Рисуй мышкой. Выбери инструмент, кликай/тяни по сетке. «Проверить» гоняет тот же аудит, что и игра.</p>
+          <p class="hint">Рисуй мышкой. Выбери инструмент, кликай/тяни по сетке. «▶ Тест» — сразу поиграть свою карту, «Проверить» — тот же аудит, что и в игре.</p>
+          <p class="hint" style="color: var(--amber)">Прыжок вверх ~2,5 кл · батут ~3,6 кл · прыжок в длину ~3,7 кл. Выше 2,5 клеток без батута не запрыгнуть, яму шире ~3 клеток не перепрыгнуть.</p>
 
           <h2>Инструмент</h2>
           <div class="tools" id="tools"></div>
@@ -134,7 +135,8 @@
 
         <div class="panel" style="margin-top:12px">
           <div class="row">
-            <button class="primary" id="checkBtn">Проверить проходимость</button>
+            <button class="primary" id="testBtn">▶ Тест — играть карту</button>
+            <button id="checkBtn">Проверить проходимость</button>
             <button id="exportBtn">Экспорт JSON</button>
             <button id="downloadBtn">Скачать .json</button>
             <button id="importBtn">Импорт из поля ниже</button>
@@ -181,6 +183,8 @@
       const canvas = document.getElementById('grid');
       const ctx = canvas.getContext('2d');
       const $ = (id) => document.getElementById(id);
+      // Поля под линейку координат слева и сверху.
+      const MARGIN_L = 22, MARGIN_T = 18;
 
       function blankGrid(cols, rows) {
         const g = Array.from({ length: rows }, () => Array.from({ length: cols }, () => '.'));
@@ -226,19 +230,28 @@
       // --- Отрисовка сетки ---
       function draw() {
         const s = state.cell;
-        canvas.width = state.cols * s;
-        canvas.height = state.rows * s;
+        canvas.width = MARGIN_L + state.cols * s;
+        canvas.height = MARGIN_T + state.rows * s;
         ctx.fillStyle = '#0e1424';
         ctx.fillRect(0, 0, canvas.width, canvas.height);
 
+        // Линейка координат по краям — легче попадать в нужную колонку/строку
+        // (пригодится для форм платформ и комет).
+        ctx.fillStyle = 'rgba(232,236,244,0.5)';
+        ctx.font = '10px ui-monospace, monospace';
+        ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
+        for (let c = 0; c < state.cols; c += 5) ctx.fillText(c, MARGIN_L + c * s + s / 2, MARGIN_T / 2);
+        for (let r = 0; r < state.rows; r += 2) ctx.fillText(r, MARGIN_L / 2, MARGIN_T + r * s + s / 2);
+
+        ctx.save();
+        ctx.translate(MARGIN_L, MARGIN_T);
         for (let r = 0; r < state.rows; r++) {
-          for (let c = 0; c < state.cols; c++) {
-            drawCell(c, r, state.grid[r][c], s);
-          }
+          for (let c = 0; c < state.cols; c++) drawCell(c, r, state.grid[r][c], s);
         }
         drawPaths(s);
         drawSpawn(s);
         drawGridLines(s);
+        ctx.restore();
       }
 
       function drawCell(c, r, ch, s) {
@@ -317,8 +330,8 @@
       let painting = false;
       function cellFromEvent(e) {
         const rect = canvas.getBoundingClientRect();
-        const x = (e.clientX - rect.left) * (canvas.width / rect.width);
-        const y = (e.clientY - rect.top) * (canvas.height / rect.height);
+        const x = (e.clientX - rect.left) * (canvas.width / rect.width) - MARGIN_L;
+        const y = (e.clientY - rect.top) * (canvas.height / rect.height) - MARGIN_T;
         return [Math.floor(x / state.cell), Math.floor(y / state.cell)];
       }
       canvas.addEventListener('pointerdown', (e) => { painting = true; canvas.setPointerCapture(e.pointerId); paint(...cellFromEvent(e)); });
@@ -450,6 +463,15 @@
       $('exportBtn').addEventListener('click', exportJson);
       $('downloadBtn').addEventListener('click', download);
       $('importBtn').addEventListener('click', importJson);
+      // «Тест»: проверяем, что уровень вообще грузится, кладём в localStorage и
+      // открываем игру в тест-режиме (index.html?test=1) в новой вкладке.
+      $('testBtn').addEventListener('click', () => {
+        try { parseLevel(structuredClone(toLevel())); }
+        catch (e) { alert('Сначала поправь, чтобы играть:\n' + e.message); return; }
+        try { localStorage.setItem('keysofknowledge.testlevel', JSON.stringify(toLevel())); }
+        catch (e) { alert('Не удалось сохранить карту для теста: ' + e.message); return; }
+        window.open('../index.html?test=1', '_blank');
+      });
       $('addPlatform').addEventListener('click', () => {
         state.platforms.push({ from: [Number($('pfx').value), Number($('pfy').value)],
           to: [Number($('ptx').value), Number($('pty').value)],
