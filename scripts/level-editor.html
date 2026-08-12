@@ -1,0 +1,474 @@
+<!doctype html>
+<html lang="ru">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <meta name="color-scheme" content="dark" />
+    <title>Редактор уровней</title>
+    <style>
+      :root {
+        --sky-deep: #141b34; --sky-mid: #23305a; --chalk: #e8ecf4;
+        --amber: #f2a83b; --teal: #3dbfa8; --coral: #e5615f;
+      }
+      * { box-sizing: border-box; }
+      body { margin: 0; background: var(--sky-deep); color: var(--chalk);
+             font: 14px/1.5 system-ui, sans-serif; }
+      h1 { font-size: 20px; margin: 0 0 4px; }
+      h2 { font-size: 14px; margin: 14px 0 6px; color: color-mix(in srgb, var(--chalk) 75%, transparent); }
+      a { color: var(--amber); }
+      .app { display: grid; grid-template-columns: 240px 1fr; gap: 16px; padding: 16px; align-items: start; }
+      .panel { background: rgb(232 236 244 / 6%); border-radius: 10px; padding: 12px; }
+      .row { display: flex; flex-wrap: wrap; gap: 6px; align-items: center; margin: 4px 0; }
+      label { font-size: 12px; color: color-mix(in srgb, var(--chalk) 70%, transparent); }
+      input, select { background: var(--sky-deep); color: var(--chalk); border: 1px solid color-mix(in srgb, var(--chalk) 25%, transparent);
+                      border-radius: 6px; padding: 4px 6px; font: inherit; }
+      input[type="number"] { width: 56px; }
+      button { background: transparent; color: var(--chalk); border: 1px solid color-mix(in srgb, var(--chalk) 30%, transparent);
+               border-radius: 8px; padding: 6px 10px; font: inherit; cursor: pointer; }
+      button:hover { border-color: var(--amber); }
+      button.primary { background: var(--amber); color: var(--sky-deep); border-color: transparent; font-weight: 700; }
+      .tools { display: grid; grid-template-columns: repeat(2, 1fr); gap: 6px; }
+      .tool { display: flex; align-items: center; gap: 6px; padding: 7px 8px; border-radius: 8px;
+              border: 1px solid color-mix(in srgb, var(--chalk) 20%, transparent); cursor: pointer; background: rgb(0 0 0 / 20%); }
+      .tool.active { border-color: var(--amber); background: rgb(242 168 59 / 15%); }
+      .tool .sw { width: 16px; height: 16px; border-radius: 4px; flex: 0 0 auto; }
+      .canvas-wrap { overflow: auto; max-height: 78vh; border: 1px solid color-mix(in srgb, var(--chalk) 15%, transparent);
+                     border-radius: 10px; background: #0e1424; }
+      canvas { display: block; image-rendering: pixelated; cursor: crosshair; }
+      textarea { width: 100%; min-height: 120px; background: var(--sky-deep); color: var(--chalk);
+                 border: 1px solid color-mix(in srgb, var(--chalk) 25%, transparent); border-radius: 8px; padding: 8px;
+                 font: 12px/1.4 ui-monospace, monospace; }
+      .verdict { padding: 10px 12px; border-radius: 8px; font-weight: 700; margin: 8px 0; }
+      .verdict.ok { background: rgb(61 191 168 / 18%); color: var(--teal); }
+      .verdict.bad { background: rgb(229 97 95 / 18%); color: var(--coral); }
+      .problem { color: var(--coral); font-size: 13px; }
+      .note { color: color-mix(in srgb, var(--chalk) 60%, transparent); font-size: 12px; }
+      .list { display: flex; flex-direction: column; gap: 4px; }
+      .list .item { display: flex; justify-content: space-between; gap: 8px; font-size: 12px;
+                    background: rgb(0 0 0 / 20%); border-radius: 6px; padding: 4px 8px; }
+      .list .item button { padding: 0 6px; font-size: 12px; }
+      .hint { font-size: 12px; color: color-mix(in srgb, var(--chalk) 60%, transparent); }
+    </style>
+  </head>
+  <body>
+    <div class="app">
+      <div>
+        <div class="panel">
+          <h1>Редактор уровней</h1>
+          <p class="hint">Рисуй мышкой. Выбери инструмент, кликай/тяни по сетке. «Проверить» гоняет тот же аудит, что и игра.</p>
+
+          <h2>Инструмент</h2>
+          <div class="tools" id="tools"></div>
+
+          <h2>Параметры сундука</h2>
+          <div class="row">
+            <label>предмет</label>
+            <select id="chestSubject">
+              <option value="algebra">алгебра</option>
+              <option value="geometry">геометрия</option>
+              <option value="physics">физика</option>
+            </select>
+          </div>
+          <div class="row">
+            <label>класс</label>
+            <select id="chestGrade"><option>5</option><option>6</option><option>7</option></select>
+            <label>сложн.</label>
+            <select id="chestDiff"><option>1</option><option>2</option><option>3</option></select>
+          </div>
+          <div class="row">
+            <label>ключ</label>
+            <select id="chestKey"><option value="amber">янтарь</option><option value="teal">бирюза</option><option value="coral">коралл</option></select>
+          </div>
+
+          <h2>Параметры двери</h2>
+          <div class="row">
+            <label>ключ</label>
+            <select id="doorKey"><option value="amber">янтарь</option><option value="teal">бирюза</option><option value="coral">коралл</option></select>
+            <label><input type="checkbox" id="doorExit" /> выход</label>
+          </div>
+        </div>
+
+        <div class="panel">
+          <h2>Уровень</h2>
+          <div class="row"><label>id</label><input id="lvlId" value="new" style="width:70px" /></div>
+          <div class="row"><label>название</label><input id="lvlTitle" value="Новый уровень" style="width:140px" /></div>
+          <div class="row">
+            <label>жизни</label><input type="number" id="lvlLives" value="3" min="1" />
+          </div>
+          <div class="row">
+            <label>ширина</label><input type="number" id="gridW" value="40" min="6" />
+            <label>высота</label><input type="number" id="gridH" value="16" min="6" />
+            <button id="resizeBtn">Применить</button>
+          </div>
+          <div class="row">
+            <label>масштаб</label><input type="number" id="scale" value="26" min="12" max="48" />
+          </div>
+        </div>
+      </div>
+
+      <div>
+        <div class="canvas-wrap"><canvas id="grid"></canvas></div>
+
+        <div class="panel" style="margin-top:12px">
+          <h2>Движущиеся платформы</h2>
+          <div class="row">
+            from <input type="number" id="pfx" value="10" /> <input type="number" id="pfy" value="12" />
+            to <input type="number" id="ptx" value="16" /> <input type="number" id="pty" value="12" />
+            тайлов <input type="number" id="ptiles" value="2" /> скор. <input type="number" id="pspeed" value="55" />
+            <button id="addPlatform">Добавить</button>
+          </div>
+          <div class="list" id="platformList"></div>
+
+          <h2>Кометы (опасности)</h2>
+          <div class="row">
+            from <input type="number" id="hfx" value="20" /> <input type="number" id="hfy" value="2" />
+            to <input type="number" id="htx" value="20" /> <input type="number" id="hty" value="13" />
+            скор. <input type="number" id="hspeed" value="135" />
+            режим
+            <select id="hmode"><option value="patrol">туда-обратно</option><option value="fall">падение</option></select>
+            фаза <input type="number" id="hphase" value="0" step="0.1" />
+            <button id="addHazard">Добавить</button>
+          </div>
+          <div class="list" id="hazardList"></div>
+        </div>
+
+        <div class="panel" style="margin-top:12px">
+          <div class="row">
+            <button class="primary" id="checkBtn">Проверить проходимость</button>
+            <button id="exportBtn">Экспорт JSON</button>
+            <button id="downloadBtn">Скачать .json</button>
+            <button id="importBtn">Импорт из поля ниже</button>
+          </div>
+          <div id="verdict"></div>
+          <textarea id="json" placeholder="Тут появится JSON при экспорте. Сюда же можно вставить чужой уровень и нажать «Импорт»."></textarea>
+        </div>
+      </div>
+    </div>
+
+    <script type="module">
+      import { parseLevel } from '../src/game/level.js';
+      import { auditLevel } from './audit.js';
+      import { PALETTE } from '../src/engine/constants.js';
+
+      // Каноническая легенда. Символы фиксированы — они же используются во всех
+      // levels/*.json. При импорте чужой легенды сводим тайлы по ИМЕНИ к этим символам.
+      const LEGEND = {
+        '#': 'ground', '=': 'platform', 'S': 'spring', '^': 'spike',
+        'o': 'coin', 'C': 'chest', 'D': 'door', 'F': 'checkpoint', '.': 'empty'
+      };
+      const NAME_TO_SYMBOL = Object.fromEntries(Object.entries(LEGEND).map(([s, n]) => [n, s]));
+      const KEY_COLOR = { amber: PALETTE.amber, teal: PALETTE.teal, coral: PALETTE.coral };
+
+      const TOOLS = [
+        { id: '#', name: 'Земля', color: 'rgba(232,236,244,0.5)' },
+        { id: '=', name: 'Платформа', color: 'rgba(232,236,244,0.8)' },
+        { id: 'S', name: 'Батут', color: PALETTE.amber },
+        { id: '^', name: 'Шипы', color: PALETTE.coral },
+        { id: 'o', name: 'Монета', color: PALETTE.amber },
+        { id: 'F', name: 'Чекпоинт', color: PALETTE.teal },
+        { id: 'C', name: 'Сундук', color: PALETTE.amber },
+        { id: 'D', name: 'Дверь', color: PALETTE.teal },
+        { id: '@', name: 'Спавн', color: '#ffffff' },
+        { id: '.', name: 'Ластик', color: 'transparent' }
+      ];
+
+      const state = {
+        cols: 40, rows: 16, cell: 26, tool: '#',
+        grid: [], spawn: [2, 13],
+        chests: [], doors: [], platforms: [], hazards: []
+      };
+
+      const canvas = document.getElementById('grid');
+      const ctx = canvas.getContext('2d');
+      const $ = (id) => document.getElementById(id);
+
+      function blankGrid(cols, rows) {
+        const g = Array.from({ length: rows }, () => Array.from({ length: cols }, () => '.'));
+        // Дружелюбный старт: пол в двух нижних рядах.
+        for (let c = 0; c < cols; c++) { g[rows - 1][c] = '#'; g[rows - 2][c] = '#'; }
+        return g;
+      }
+
+      function entityAt(list, col, row) {
+        return list.findIndex((e) => e.at[0] === col && e.at[1] === row);
+      }
+
+      function removeEntitiesAt(col, row) {
+        let i;
+        while ((i = entityAt(state.chests, col, row)) !== -1) state.chests.splice(i, 1);
+        while ((i = entityAt(state.doors, col, row)) !== -1) state.doors.splice(i, 1);
+      }
+
+      function paint(col, row) {
+        if (col < 0 || col >= state.cols || row < 0 || row >= state.rows) return;
+        const tool = state.tool;
+        if (tool === '@') { state.spawn = [col, row]; draw(); return; }
+
+        // Смена содержимого клетки всегда убирает старую сущность на ней.
+        removeEntitiesAt(col, row);
+
+        if (tool === 'C') {
+          state.grid[row][col] = 'C';
+          state.chests.push({
+            at: [col, row], subject: $('chestSubject').value,
+            grade: Number($('chestGrade').value), difficulty: Number($('chestDiff').value),
+            keyColor: $('chestKey').value
+          });
+        } else if (tool === 'D') {
+          state.grid[row][col] = 'D';
+          state.doors.push({ at: [col, row], keyColor: $('doorKey').value, exit: $('doorExit').checked });
+        } else {
+          state.grid[row][col] = tool; // '#','=','S','^','o','F','.'
+        }
+        draw();
+      }
+
+      // --- Отрисовка сетки ---
+      function draw() {
+        const s = state.cell;
+        canvas.width = state.cols * s;
+        canvas.height = state.rows * s;
+        ctx.fillStyle = '#0e1424';
+        ctx.fillRect(0, 0, canvas.width, canvas.height);
+
+        for (let r = 0; r < state.rows; r++) {
+          for (let c = 0; c < state.cols; c++) {
+            drawCell(c, r, state.grid[r][c], s);
+          }
+        }
+        drawPaths(s);
+        drawSpawn(s);
+        drawGridLines(s);
+      }
+
+      function drawCell(c, r, ch, s) {
+        const x = c * s, y = r * s;
+        switch (ch) {
+          case '#': fillCell(x, y, s, 'rgba(232,236,244,0.14)', 'rgba(232,236,244,0.35)'); break;
+          case '=': fillCell(x, y, s, 'rgba(232,236,244,0.26)', 'rgba(232,236,244,0.7)'); break;
+          case 'S':
+            fillCell(x, y, s, 'rgba(242,168,59,0.2)', PALETTE.amber);
+            glyph(x, y, s, 'S', PALETTE.amber); break;
+          case '^': {
+            ctx.fillStyle = PALETTE.coral; ctx.beginPath();
+            for (let i = 0; i < 3; i++) {
+              const l = x + (i * s) / 3;
+              ctx.moveTo(l, y + s); ctx.lineTo(l + s / 6, y + s * 0.3); ctx.lineTo(l + s / 3, y + s);
+            }
+            ctx.fill(); break;
+          }
+          case 'o':
+            ctx.fillStyle = PALETTE.amber; ctx.beginPath();
+            ctx.arc(x + s / 2, y + s / 2, s * 0.24, 0, Math.PI * 2); ctx.fill(); break;
+          case 'F':
+            ctx.strokeStyle = PALETTE.teal; ctx.lineWidth = 2;
+            ctx.beginPath(); ctx.moveTo(x + s * 0.3, y + s * 0.15); ctx.lineTo(x + s * 0.3, y + s * 0.85); ctx.stroke();
+            ctx.fillStyle = PALETTE.teal; ctx.beginPath();
+            ctx.moveTo(x + s * 0.3, y + s * 0.18); ctx.lineTo(x + s * 0.62, y + s * 0.3); ctx.lineTo(x + s * 0.3, y + s * 0.42); ctx.fill(); break;
+          case 'C':
+            fillCell(x, y, s, 'rgba(242,168,59,0.25)', PALETTE.amber); glyph(x, y, s, 'C', PALETTE.amber); break;
+          case 'D': {
+            const door = state.doors[entityAt(state.doors, c, r)];
+            const col = door ? (KEY_COLOR[door.keyColor] ?? PALETTE.chalk) : PALETTE.chalk;
+            fillCell(x, y, s, 'rgba(232,236,244,0.08)', col);
+            glyph(x, y, s, door && door.exit ? 'D*' : 'D', col); break;
+          }
+          default: break;
+        }
+      }
+
+      function fillCell(x, y, s, fill, stroke) {
+        ctx.fillStyle = fill; ctx.fillRect(x + 1, y + 1, s - 2, s - 2);
+        ctx.strokeStyle = stroke; ctx.lineWidth = 1.5; ctx.strokeRect(x + 1.5, y + 1.5, s - 3, s - 3);
+      }
+      function glyph(x, y, s, text, color) {
+        ctx.fillStyle = color; ctx.font = `${Math.round(s * 0.42)}px ui-monospace, monospace`;
+        ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
+        ctx.fillText(text, x + s / 2, y + s / 2 + 1);
+      }
+
+      function drawSpawn(s) {
+        const [c, r] = state.spawn;
+        ctx.strokeStyle = '#ffffff'; ctx.lineWidth = 2;
+        ctx.strokeRect(c * s + 2, r * s + 2, s - 4, s - 4);
+        glyph(c * s, r * s, s, '@', '#ffffff');
+      }
+
+      function drawPaths(s) {
+        const line = (from, to, color) => {
+          ctx.strokeStyle = color; ctx.lineWidth = 2; ctx.setLineDash([4, 4]);
+          ctx.beginPath();
+          ctx.moveTo(from[0] * s + s / 2, from[1] * s + s / 2);
+          ctx.lineTo(to[0] * s + s / 2, to[1] * s + s / 2);
+          ctx.stroke(); ctx.setLineDash([]);
+          for (const [p, tag] of [[from, 'A'], [to, 'B']]) glyph(p[0] * s, p[1] * s, s, tag, color);
+        };
+        for (const p of state.platforms) line(p.from, p.to, PALETTE.teal);
+        for (const h of state.hazards) line(h.from, h.to, PALETTE.coral);
+      }
+
+      function drawGridLines(s) {
+        ctx.strokeStyle = 'rgba(232,236,244,0.06)'; ctx.lineWidth = 1;
+        for (let c = 0; c <= state.cols; c++) { ctx.beginPath(); ctx.moveTo(c * s, 0); ctx.lineTo(c * s, canvas.height); ctx.stroke(); }
+        for (let r = 0; r <= state.rows; r++) { ctx.beginPath(); ctx.moveTo(0, r * s); ctx.lineTo(canvas.width, r * s); ctx.stroke(); }
+      }
+
+      // --- Мышь ---
+      let painting = false;
+      function cellFromEvent(e) {
+        const rect = canvas.getBoundingClientRect();
+        const x = (e.clientX - rect.left) * (canvas.width / rect.width);
+        const y = (e.clientY - rect.top) * (canvas.height / rect.height);
+        return [Math.floor(x / state.cell), Math.floor(y / state.cell)];
+      }
+      canvas.addEventListener('pointerdown', (e) => { painting = true; canvas.setPointerCapture(e.pointerId); paint(...cellFromEvent(e)); });
+      canvas.addEventListener('pointermove', (e) => { if (painting) paint(...cellFromEvent(e)); });
+      canvas.addEventListener('pointerup', () => { painting = false; });
+      canvas.addEventListener('pointercancel', () => { painting = false; });
+
+      // --- Инструменты ---
+      function buildTools() {
+        const box = $('tools'); box.replaceChildren();
+        for (const t of TOOLS) {
+          const el = document.createElement('div');
+          el.className = 'tool' + (t.id === state.tool ? ' active' : '');
+          el.innerHTML = `<span class="sw" style="background:${t.color}"></span>${t.name}`;
+          el.addEventListener('click', () => { state.tool = t.id; buildTools(); });
+          box.append(el);
+        }
+      }
+
+      // --- Списки платформ/комет ---
+      function renderLists() {
+        const pl = $('platformList'); pl.replaceChildren();
+        state.platforms.forEach((p, i) => {
+          const row = document.createElement('div'); row.className = 'item';
+          row.innerHTML = `<span>[${p.from}]→[${p.to}] ${p.tiles}т ${p.speed}px/с</span>`;
+          const b = document.createElement('button'); b.textContent = '×';
+          b.addEventListener('click', () => { state.platforms.splice(i, 1); renderLists(); draw(); });
+          row.append(b); pl.append(row);
+        });
+        const hl = $('hazardList'); hl.replaceChildren();
+        state.hazards.forEach((h, i) => {
+          const row = document.createElement('div'); row.className = 'item';
+          row.innerHTML = `<span>[${h.from}]→[${h.to}] ${h.speed}px/с ${h.mode}${h.mode === 'fall' ? ' ф' + h.phase : ''}</span>`;
+          const b = document.createElement('button'); b.textContent = '×';
+          b.addEventListener('click', () => { state.hazards.splice(i, 1); renderLists(); draw(); });
+          row.append(b); hl.append(row);
+        });
+      }
+
+      // --- Сборка объекта уровня ---
+      function toLevel() {
+        const level = {
+          id: $('lvlId').value.trim() || 'new',
+          title: $('lvlTitle').value.trim() || 'Без названия',
+          tileSize: 32,
+          spawn: state.spawn,
+          lives: Number($('lvlLives').value) || 3,
+          legend: LEGEND,
+          map: state.grid.map((row) => row.join('')),
+          chests: state.chests,
+          doors: state.doors,
+          platforms: state.platforms,
+          hazards: state.hazards
+        };
+        return level;
+      }
+
+      // --- Проверка ---
+      function check() {
+        const box = $('verdict'); box.replaceChildren();
+        let level;
+        try {
+          level = parseLevel(structuredClone(toLevel()));
+        } catch (err) {
+          const v = document.createElement('div'); v.className = 'verdict bad';
+          v.textContent = 'Не загружается: ' + err.message; box.append(v); return;
+        }
+        const report = auditLevel(level);
+        const ok = report.problems.length === 0;
+        const v = document.createElement('div'); v.className = 'verdict ' + (ok ? 'ok' : 'bad');
+        v.textContent = ok ? 'Проходится ✓' : 'Есть проблемы:'; box.append(v);
+        for (const p of report.problems) {
+          const d = document.createElement('div'); d.className = 'problem'; d.textContent = '• ' + p; box.append(d);
+        }
+        const n = document.createElement('div'); n.className = 'note'; n.textContent = report.notes.join(' · '); box.append(n);
+      }
+
+      // --- Импорт/экспорт ---
+      function exportJson() {
+        $('json').value = JSON.stringify(toLevel(), null, 2);
+      }
+      function download() {
+        exportJson();
+        const blob = new Blob([$('json').value], { type: 'application/json' });
+        const a = document.createElement('a');
+        a.href = URL.createObjectURL(blob); a.download = (toLevel().id) + '.json'; a.click();
+        URL.revokeObjectURL(a.href);
+      }
+      function importJson() {
+        let data;
+        try { data = JSON.parse($('json').value); } catch (e) { alert('Не разобрать JSON: ' + e.message); return; }
+        const rows = data.map ?? [];
+        state.rows = rows.length; state.cols = rows[0]?.length ?? 0;
+        const legend = data.legend ?? LEGEND;
+        state.grid = rows.map((line) => [...line].map((chSymbol) => {
+          const name = legend[chSymbol] ?? 'empty';
+          return NAME_TO_SYMBOL[name] ?? '.';
+        }));
+        state.spawn = data.spawn ?? [2, state.rows - 3];
+        state.chests = (data.chests ?? []).map((c) => ({ ...c }));
+        state.doors = (data.doors ?? []).map((d) => ({ ...d, exit: Boolean(d.exit) }));
+        state.platforms = (data.platforms ?? []).map((p) => ({ ...p }));
+        state.hazards = (data.hazards ?? []).map((h) => ({ ...h }));
+        $('lvlId').value = data.id ?? 'new';
+        $('lvlTitle').value = data.title ?? '';
+        $('lvlLives').value = data.lives ?? 3;
+        $('gridW').value = state.cols; $('gridH').value = state.rows;
+        renderLists(); draw();
+      }
+
+      function resize() {
+        const w = Math.max(6, Number($('gridW').value) | 0);
+        const h = Math.max(6, Number($('gridH').value) | 0);
+        const old = state.grid;
+        const g = Array.from({ length: h }, (_, r) => Array.from({ length: w }, (_, c) =>
+          (old[r] && old[r][c]) ? old[r][c] : '.'));
+        state.grid = g; state.cols = w; state.rows = h;
+        // Сущности за пределами новой карты убираем.
+        const inside = (e) => e.at[0] < w && e.at[1] < h;
+        state.chests = state.chests.filter(inside);
+        state.doors = state.doors.filter(inside);
+        draw();
+      }
+
+      // --- Подключение кнопок ---
+      $('resizeBtn').addEventListener('click', resize);
+      $('scale').addEventListener('change', () => { state.cell = Math.max(12, Number($('scale').value) | 0); draw(); });
+      $('checkBtn').addEventListener('click', check);
+      $('exportBtn').addEventListener('click', exportJson);
+      $('downloadBtn').addEventListener('click', download);
+      $('importBtn').addEventListener('click', importJson);
+      $('addPlatform').addEventListener('click', () => {
+        state.platforms.push({ from: [Number($('pfx').value), Number($('pfy').value)],
+          to: [Number($('ptx').value), Number($('pty').value)],
+          tiles: Number($('ptiles').value), speed: Number($('pspeed').value) });
+        renderLists(); draw();
+      });
+      $('addHazard').addEventListener('click', () => {
+        const mode = $('hmode').value;
+        const h = { from: [Number($('hfx').value), Number($('hfy').value)],
+          to: [Number($('htx').value), Number($('hty').value)], speed: Number($('hspeed').value), mode };
+        if (mode === 'fall') h.phase = Number($('hphase').value);
+        state.hazards.push(h); renderLists(); draw();
+      });
+
+      // Старт.
+      state.grid = blankGrid(state.cols, state.rows);
+      buildTools();
+      renderLists();
+      draw();
+    </script>
+  </body>
+</html>

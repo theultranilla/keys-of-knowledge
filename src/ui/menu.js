@@ -76,7 +76,7 @@ export function createMenu({ mount, save, levels, on }) {
   }
 
   function settingsScreen() {
-    const rows = ['sound', 'music', 'reducedMotion'].map((name) =>
+    const rows = ['sound', 'reducedMotion'].map((name) =>
       toggle(name, save.settings[name], (value) => on.setting(name, value))
     );
 

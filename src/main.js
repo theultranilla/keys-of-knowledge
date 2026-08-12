@@ -66,7 +66,6 @@ const menu = createMenu({
       save.reset();
       setReducedMotionOverride(save.settings.reducedMotion);
       audio.setSetting('sound', save.settings.sound);
-      audio.setSetting('music', save.settings.music);
     }
   }
 });
