@@ -2,7 +2,8 @@ import { VIEW_WIDTH, VIEW_HEIGHT, PALETTE, PLAYER_WIDTH, PLAYER_HEIGHT } from '.
 import { drawCharacter } from '../engine/character.js';
 import { DEFAULT_SKIN } from './skins.js';
 import {
-  generateFloor, roomInterior, roomContains, allWalls, drawRooms, ROOM_W, ROOM_H, WALL
+  generateFloor, roomInterior, roomContains, allWalls, drawRooms, spawnChests, bossReward,
+  ROOM_W, ROOM_H, WALL
 } from './dungeonFloor.js';
 import { createDungeonTouch } from './dungeonTouch.js';
 
@@ -19,11 +20,13 @@ const BOSS_R = 30, BOSS_SPEED = 60;
 const PLAYER_HP = 6, CONTACT_DMG = 1, CONTACT_CD = 0.8;
 const CAM_SMOOTH = 8, PORTAL_R = 30;
 
-export function createDungeonSession({ input, audio, save, canvas }) {
+export function createDungeonSession({ input, audio, save, canvas, modal, tasks }) {
   const player = {
     x: 0, y: 0, width: PLAYER_WIDTH, height: PLAYER_HEIGHT,
-    prevX: 0, prevY: 0, aim: { x: 1, y: 0 }, facing: 1, hp: PLAYER_HP, hurtCd: 0
+    prevX: 0, prevY: 0, aim: { x: 1, y: 0 }, facing: 1,
+    hp: PLAYER_HP, maxHp: PLAYER_HP, hurtCd: 0, dmgMul: 1
   };
+  let busy = false; // пока открыта карточка задачи — мир стоит
   let skin = save?.equipped ?? DEFAULT_SKIN;
   const pointer = { x: VIEW_WIDTH * 0.7, y: VIEW_HEIGHT / 2 };
   const cam = { x: 0, y: 0, prevX: 0, prevY: 0 };
@@ -35,6 +38,7 @@ export function createDungeonSession({ input, audio, save, canvas }) {
 
   function newFloor(n) {
     floor = generateFloor(n);
+    spawnChests(floor); // сундуки-выбор в сокровищницах
     current = floor.start;
     current.visited = true;
     player.x = current.cx - player.width / 2;
@@ -65,6 +69,7 @@ export function createDungeonSession({ input, audio, save, canvas }) {
   window.addEventListener('pointerup', onUp);
 
   function update(dt) {
+    if (busy) return; // открыта карточка задачи — мир стоит
     player.prevX = player.x; player.prevY = player.y;
     cam.prevX = cam.x; cam.prevY = cam.y;
     if (fireCd > 0) fireCd -= dt;
@@ -75,6 +80,7 @@ export function createDungeonSession({ input, audio, save, canvas }) {
     clampToRooms();  // страховка: никогда не оказаться за пределами всех комнат
     trackRoom();
     maybeActivate(); // двери запираем, только когда игрок уже внутри (не в проёме)
+    tryChest();      // рядом с сундуком — открыть задачу
     aimAndFire();
     updateShots(dt);
     if (current.spawned && !current.cleared) updateCombat(dt);
@@ -189,7 +195,7 @@ export function createDungeonSession({ input, audio, save, canvas }) {
       if (!dead) {
         for (const e of current.enemies) {
           if (e.hp > 0 && Math.hypot(s.x - e.x, s.y - e.y) < e.r + SHOT_R) {
-            e.hp -= SHOT_DMG; e.hitFlash = HIT_FLASH; dead = true; break;
+            e.hp -= SHOT_DMG * player.dmgMul; e.hitFlash = HIT_FLASH; dead = true; break;
           }
         }
       }
@@ -209,14 +215,53 @@ export function createDungeonSession({ input, audio, save, canvas }) {
       if (d < e.r + player.width / 2 && player.hurtCd <= 0) {
         player.hp = Math.max(0, player.hp - CONTACT_DMG);
         player.hurtCd = CONTACT_CD;
-        if (player.hp <= 0) { newFloor(1); player.hp = PLAYER_HP; return; }
+        if (player.hp <= 0) { // погиб — новый забег, апгрейды сбрасываются
+          player.maxHp = PLAYER_HP; player.dmgMul = 1;
+          newFloor(1); player.hp = player.maxHp; return;
+        }
       }
     }
     if (current.enemies.length === 0) {
       current.cleared = true;
       current.doorsClosed = false; // двери открылись
-      if (current.kind === 'boss') current.portal = { x: current.cx, y: current.cy - ROOM_H / 2 + WALL + 46 };
+      if (current.kind === 'boss') {
+        current.portal = { x: current.cx, y: current.cy - ROOM_H / 2 + WALL + 46 };
+        current.chests = bossReward(current); // награда за босса
+      }
     }
+  }
+
+  function tryChest() {
+    if (!current.chests) return;
+    const c = center();
+    for (const ch of current.chests) {
+      if (!ch.opened && Math.hypot(c.x - ch.x, c.y - ch.y) < 34) { openChest(ch); return; }
+    }
+  }
+
+  // Открыть сундук: карточка задачи → решил → награда. «Знания = сила». Пока открыта
+  // карточка, busy=true и мир стоит. Ключ задачи привязан к комнате — вернулся, та же.
+  async function openChest(ch) {
+    if (busy) return;
+    busy = true;
+    input.releaseAll();
+    const grade = Math.min(5 + (floor.floorNumber - 1), 7);
+    const difficulty = Math.min(floor.floorNumber, 3);
+    const task = tasks.createTask({ subject: ch.subject, grade, difficulty },
+      `dungeon-f${floor.floorNumber}-r${current.index}-${ch.subject}`);
+    const outcome = await modal.open(task, tasks);
+    busy = false;
+    if (!outcome.solved) return; // вышел без решения — сундук ждёт
+    applyReward(ch.reward, outcome.usedSolution);
+    for (const other of current.chests) other.opened = true; // выбор: остальные исчезают
+  }
+
+  function applyReward(reward, usedSolution) {
+    const strong = !usedSolution; // решил сам — награда сильнее
+    if (reward === 'damage') player.dmgMul += strong ? 0.5 : 0.3;
+    else if (reward === 'maxhp') { const add = strong ? 3 : 2; player.maxHp += add; player.hp += add; }
+    else if (reward === 'heal') player.hp = Math.min(player.maxHp, player.hp + (strong ? 4 : 3));
+    audio?.play?.('key');
   }
 
   function render(ctx, alpha) {
@@ -277,7 +322,7 @@ export function createDungeonSession({ input, audio, save, canvas }) {
   function drawHp(ctx) {
     const x = 18, y = 18, w = 220, h = 20;
     ctx.fillStyle = 'rgba(0,0,0,0.5)'; ctx.fillRect(x, y, w, h);
-    ctx.fillStyle = PALETTE.coral; ctx.fillRect(x + 3, y + 3, (w - 6) * Math.max(0, player.hp / PLAYER_HP), h - 6);
+    ctx.fillStyle = PALETTE.coral; ctx.fillRect(x + 3, y + 3, (w - 6) * Math.max(0, player.hp / player.maxHp), h - 6);
   }
 
   return {

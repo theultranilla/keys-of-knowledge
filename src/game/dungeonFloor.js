@@ -138,6 +138,19 @@ export function drawRooms(ctx, floor) {
   // стены
   ctx.fillStyle = '#151b34';
   for (const room of floor.rooms) for (const r of roomWalls(room)) ctx.fillRect(r.x, r.y, r.w, r.h);
+  // сундуки (сокровищница/награда босса)
+  ctx.textAlign = 'center';
+  ctx.textBaseline = 'middle';
+  ctx.font = 'bold 18px sans-serif';
+  for (const room of floor.rooms) if (room.chests) for (const ch of room.chests) {
+    if (ch.opened) continue;
+    ctx.fillStyle = ch.color;
+    ctx.fillRect(ch.x - 14, ch.y - 14, 28, 28);
+    ctx.fillStyle = '#15151f';
+    ctx.fillText(ch.label, ch.x, ch.y + 1);
+  }
+  ctx.textAlign = 'left';
+
   // портал (за боссом)
   for (const room of floor.rooms) if (room.portal) {
     ctx.fillStyle = PALETTE.amber;
@@ -145,6 +158,28 @@ export function drawRooms(ctx, floor) {
     ctx.arc(room.portal.x, room.portal.y, 18, 0, Math.PI * 2);
     ctx.fill();
   }
+}
+
+// --- сундуки-выбор: предмет → тип награды ---
+const SUBJECTS = [
+  { subject: 'algebra', reward: 'damage', color: '#f2c14b', label: 'А' }, // урон
+  { subject: 'geometry', reward: 'maxhp', color: '#5ea0ff', label: 'Г' }, // макс. HP
+  { subject: 'physics', reward: 'heal', color: '#e0645f', label: 'Ф' }    // лечение
+];
+
+export function spawnChests(floor) {
+  for (const room of floor.rooms) {
+    if (room.kind !== 'treasure') continue;
+    room.chests = SUBJECTS.map((s, i) => ({
+      x: room.cx + (i - 1) * 92, y: room.cy - 24,
+      subject: s.subject, reward: s.reward, color: s.color, label: s.label, opened: false
+    }));
+  }
+}
+
+export function bossReward(room) {
+  const s = SUBJECTS[(Math.random() * SUBJECTS.length) | 0];
+  return [{ x: room.cx, y: room.cy + 70, subject: s.subject, reward: s.reward, color: s.color, label: s.label, opened: false }];
 }
 
 function shuffle(arr) {

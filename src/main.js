@@ -126,7 +126,8 @@ function startDungeon() {
   session?.destroy?.();
   isDungeon = true;
   currentLevelId = null;
-  session = createDungeonSession({ input, audio, save, canvas });
+  tasks = createTaskEngine({ runSeed: Date.now() });
+  session = createDungeonSession({ input, audio, save, canvas, modal, tasks });
   state.go(SCENE.PLAYING);
 }
 
