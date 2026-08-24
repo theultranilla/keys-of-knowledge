@@ -17,6 +17,9 @@ const MOVE_SPEED = 235;
 const FIRE_COOLDOWN = 0.14, SHOT_SPEED = 560, SHOT_LIFE = 1.1, SHOT_R = 5, SHOT_DMG = 1, MUZZLE_TIME = 0.05;
 const ENEMY_SPEED = 95, ENEMY_HP = 3, ENEMY_R = 15, HIT_FLASH = 0.08;
 const BOSS_R = 30, BOSS_SPEED = 60;
+const SHOOTER_RANGE = 250, SHOOTER_FIRE_CD = 1.3, SHOOTER_SPEED = 70;
+const TANK_R = 26, TANK_HP = 9, TANK_SPEED = 45;
+const ESHOT_SPEED = 280, ESHOT_R = 6, ESHOT_LIFE = 2.4, ESHOT_DMG = 1;
 const PLAYER_HP = 6, CONTACT_DMG = 1, CONTACT_CD = 0.8;
 const CAM_SMOOTH = 8, PORTAL_R = 30;
 
@@ -31,7 +34,8 @@ export function createDungeonSession({ input, audio, save, canvas, modal, tasks 
   const pointer = { x: VIEW_WIDTH * 0.7, y: VIEW_HEIGHT / 2 };
   const cam = { x: 0, y: 0, prevX: 0, prevY: 0 };
   let firing = false, fireCd = 0, muzzle = 0;
-  const shots = [];
+  const shots = [];   // снаряды игрока
+  const eShots = [];  // снаряды врагов-стрелков
 
   let floor, current;
   newFloor(1);
@@ -44,7 +48,7 @@ export function createDungeonSession({ input, audio, save, canvas, modal, tasks 
     player.x = current.cx - player.width / 2;
     player.y = current.cy - player.height / 2;
     player.prevX = player.x; player.prevY = player.y;
-    shots.length = 0;
+    shots.length = 0; eShots.length = 0;
     cam.x = current.cx - VIEW_WIDTH / 2; cam.y = current.cy - VIEW_HEIGHT / 2;
     cam.prevX = cam.x; cam.prevY = cam.y;
   }
@@ -83,6 +87,7 @@ export function createDungeonSession({ input, audio, save, canvas, modal, tasks 
     tryChest();      // рядом с сундуком — открыть задачу
     aimAndFire();
     updateShots(dt);
+    updateEnemyShots(dt);
     if (current.spawned && !current.cleared) updateCombat(dt);
 
     // камера держит текущую комнату (комната уже уже вьюпорта — просто центрируем её)
@@ -154,18 +159,29 @@ export function createDungeonSession({ input, audio, save, canvas, modal, tasks 
     room.doorsClosed = true;
     const it = roomInterior(room);
     if (room.kind === 'boss') {
-      room.enemies.push(makeEnemy(room.cx, room.cy - 60, BOSS_R, ENEMY_HP * 6 + floor.floorNumber * 4, BOSS_SPEED, true));
+      room.enemies.push(makeEnemy(room.cx, room.cy - 60, 'boss'));
     } else {
       const n = 4 + floor.floorNumber;
       for (let i = 0; i < n; i++) {
         const x = rand(it.x0 + 30, it.x1 - 30), y = rand(it.y0 + 30, it.y1 - 30);
-        room.enemies.push(makeEnemy(x, y, ENEMY_R, ENEMY_HP, ENEMY_SPEED, false));
+        room.enemies.push(makeEnemy(x, y, pickKind()));
       }
     }
   }
 
-  function makeEnemy(x, y, r, hp, speed, boss) {
-    return { x, y, r, hp, maxHp: hp, speed, boss, hitFlash: 0 };
+  function pickKind() {
+    const roll = Math.random();
+    if (roll < 0.25) return 'shooter';
+    if (roll < 0.4 && floor.floorNumber >= 2) return 'tank';
+    return 'chaser';
+  }
+
+  function makeEnemy(x, y, kind) {
+    let r = ENEMY_R, hp = ENEMY_HP, speed = ENEMY_SPEED;
+    if (kind === 'boss') { r = BOSS_R; hp = ENEMY_HP * 6 + floor.floorNumber * 4; speed = BOSS_SPEED; }
+    else if (kind === 'shooter') { r = 14; hp = 2; speed = SHOOTER_SPEED; }
+    else if (kind === 'tank') { r = TANK_R; hp = TANK_HP; speed = TANK_SPEED; }
+    return { x, y, r, hp, maxHp: hp, speed, kind, hitFlash: 0, fireCd: rand(0.5, SHOOTER_FIRE_CD) };
   }
 
   function aimAndFire() {
@@ -183,6 +199,7 @@ export function createDungeonSession({ input, audio, save, canvas, modal, tasks 
       shots.push({ x: c.x + player.aim.x * 20, y: c.y + player.aim.y * 20,
         vx: player.aim.x * SHOT_SPEED, vy: player.aim.y * SHOT_SPEED, life: SHOT_LIFE });
       fireCd = FIRE_COOLDOWN; muzzle = MUZZLE_TIME;
+      audio?.play?.('shoot');
     }
   }
 
@@ -195,11 +212,40 @@ export function createDungeonSession({ input, audio, save, canvas, modal, tasks 
       if (!dead) {
         for (const e of current.enemies) {
           if (e.hp > 0 && Math.hypot(s.x - e.x, s.y - e.y) < e.r + SHOT_R) {
-            e.hp -= SHOT_DMG * player.dmgMul; e.hitFlash = HIT_FLASH; dead = true; break;
+            e.hp -= SHOT_DMG * player.dmgMul; e.hitFlash = HIT_FLASH; dead = true;
+            audio?.play?.('enemyHit'); break;
           }
         }
       }
       if (dead) shots.splice(i, 1);
+    }
+  }
+
+  // Урон игроку (касание врага или его снаряд). true — если погиб (забег сброшен).
+  function hitPlayer(dmg) {
+    if (player.hurtCd > 0) return false;
+    player.hp = Math.max(0, player.hp - dmg);
+    player.hurtCd = CONTACT_CD;
+    audio?.play?.('hurt');
+    if (player.hp <= 0) {
+      player.maxHp = PLAYER_HP; player.dmgMul = 1;
+      newFloor(1); player.hp = player.maxHp;
+      return true;
+    }
+    return false;
+  }
+
+  function updateEnemyShots(dt) {
+    const walls = allWalls(floor), c = center();
+    for (let i = eShots.length - 1; i >= 0; i--) {
+      const s = eShots[i];
+      s.x += s.vx * dt; s.y += s.vy * dt; s.life -= dt;
+      let dead = s.life <= 0 || walls.some((r) => s.x > r.x && s.x < r.x + r.w && s.y > r.y && s.y < r.y + r.h);
+      if (!dead && Math.hypot(s.x - c.x, s.y - c.y) < ESHOT_R + player.width / 2) {
+        dead = true;
+        if (hitPlayer(ESHOT_DMG)) return;
+      }
+      if (dead) eShots.splice(i, 1);
     }
   }
 
@@ -208,18 +254,20 @@ export function createDungeonSession({ input, audio, save, canvas, modal, tasks 
     for (let i = current.enemies.length - 1; i >= 0; i--) {
       const e = current.enemies[i];
       if (e.hitFlash > 0) e.hitFlash -= dt;
-      if (e.hp <= 0) { current.enemies.splice(i, 1); continue; }
-      const dx = c.x - e.x, dy = c.y - e.y, d = Math.hypot(dx, dy) || 1;
-      e.x += (dx / d) * e.speed * dt;
-      e.y += (dy / d) * e.speed * dt;
-      if (d < e.r + player.width / 2 && player.hurtCd <= 0) {
-        player.hp = Math.max(0, player.hp - CONTACT_DMG);
-        player.hurtCd = CONTACT_CD;
-        if (player.hp <= 0) { // погиб — новый забег, апгрейды сбрасываются
-          player.maxHp = PLAYER_HP; player.dmgMul = 1;
-          newFloor(1); player.hp = player.maxHp; return;
+      if (e.hp <= 0) { current.enemies.splice(i, 1); audio?.play?.('enemyDie'); continue; }
+      const dx = c.x - e.x, dy = c.y - e.y, d = Math.hypot(dx, dy) || 1, nx = dx / d, ny = dy / d;
+      if (e.kind === 'shooter') {
+        if (d > SHOOTER_RANGE + 30) { e.x += nx * e.speed * dt; e.y += ny * e.speed * dt; }
+        else if (d < SHOOTER_RANGE - 30) { e.x -= nx * e.speed * dt; e.y -= ny * e.speed * dt; }
+        e.fireCd -= dt;
+        if (e.fireCd <= 0) {
+          eShots.push({ x: e.x, y: e.y, vx: nx * ESHOT_SPEED, vy: ny * ESHOT_SPEED, life: ESHOT_LIFE });
+          e.fireCd = SHOOTER_FIRE_CD;
         }
+      } else {
+        e.x += nx * e.speed * dt; e.y += ny * e.speed * dt;
       }
+      if (d < e.r + player.width / 2 && hitPlayer(CONTACT_DMG)) return;
     }
     if (current.enemies.length === 0) {
       current.cleared = true;
@@ -275,11 +323,14 @@ export function createDungeonSession({ input, audio, save, canvas, modal, tasks 
     drawRooms(ctx, floor);
 
     for (const e of current.enemies) {
-      ctx.fillStyle = e.hitFlash > 0 ? '#ffffff' : (e.boss ? '#b0343f' : PALETTE.coral);
+      ctx.fillStyle = e.hitFlash > 0 ? '#ffffff' : (ENEMY_COLOR[e.kind] ?? PALETTE.coral);
       ctx.beginPath(); ctx.arc(e.x, e.y, e.r, 0, Math.PI * 2); ctx.fill();
     }
 
-    ctx.fillStyle = PALETTE.chalk;
+    ctx.fillStyle = '#ff8a4b'; // снаряды врагов
+    for (const s of eShots) { ctx.beginPath(); ctx.arc(s.x, s.y, ESHOT_R, 0, Math.PI * 2); ctx.fill(); }
+
+    ctx.fillStyle = PALETTE.chalk; // снаряды игрока
     for (const s of shots) { ctx.beginPath(); ctx.arc(s.x, s.y, SHOT_R, 0, Math.PI * 2); ctx.fill(); }
 
     const px = lerp(player.prevX, player.x, alpha), py = lerp(player.prevY, player.y, alpha);
@@ -298,6 +349,7 @@ export function createDungeonSession({ input, audio, save, canvas, modal, tasks 
     touch.draw(ctx); // джойстики поверх (только когда есть касания)
   }
 
+  const ENEMY_COLOR = { chaser: PALETTE.coral, shooter: '#f0a04b', tank: '#8a3a52', boss: '#b0343f' };
   const MINI_KIND = { start: '#5ac888', combat: '#96a0be', boss: '#e05a67', treasure: '#f6d24d', shop: '#9e73ee' };
   function drawMinimap(ctx) {
     const step = 16, pad = 8;

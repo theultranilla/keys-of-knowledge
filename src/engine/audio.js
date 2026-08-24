@@ -85,6 +85,10 @@ export function createAudio(settings = { sound: true }) {
       tone({ from: NOTE.g5, duration: 0.36, gain: 0.12, delay: 0.24 });
     },
     hurt: () => tone({ from: 260, to: 90, type: 'sawtooth', duration: 0.28, gain: 0.18 }),
+    // Бой в данже. Выстрел частый — держим тихим и коротким, чтобы не утомлял.
+    shoot: () => tone({ from: 660, to: 500, type: 'square', duration: 0.05, gain: 0.05 }),
+    enemyHit: () => tone({ from: 320, to: 230, type: 'triangle', duration: 0.06, gain: 0.1 }),
+    enemyDie: () => tone({ from: 300, to: 80, type: 'sawtooth', duration: 0.18, gain: 0.16 }),
     complete: () => {
       [NOTE.c5, NOTE.e5, NOTE.g5, NOTE.c6].forEach((note, index) =>
         tone({ from: note, duration: 0.4, gain: 0.16, delay: index * 0.12 })
