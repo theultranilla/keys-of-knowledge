@@ -59,6 +59,9 @@ export function createCombat({ audio, hitPlayer, onClear, onEnemyHit }) {
     }
 
     if (!current.spawned || current.cleared) return;
+    // Бой всегда в запертой комнате — держим врагов внутри её интерьера, иначе
+    // они, не проверяя стены, уходят сквозь них наружу.
+    const it = roomInterior(current);
     for (let i = current.enemies.length - 1; i >= 0; i--) {
       const e = current.enemies[i];
       if (e.hitFlash > 0) e.hitFlash -= dt;
@@ -70,6 +73,8 @@ export function createCombat({ audio, hitPlayer, onClear, onEnemyHit }) {
         e.fireCd -= dt;
         if (e.fireCd <= 0) { eShots.push({ x: e.x, y: e.y, vx: nx * ESHOT_SPEED, vy: ny * ESHOT_SPEED, life: ESHOT_LIFE }); e.fireCd = SHOOTER_FIRE_CD; }
       } else { e.x += nx * e.speed * dt; e.y += ny * e.speed * dt; }
+      e.x = Math.max(it.x0 + e.r, Math.min(it.x1 - e.r, e.x));
+      e.y = Math.max(it.y0 + e.r, Math.min(it.y1 - e.r, e.y));
       if (d < e.r + half && hitPlayer(CONTACT_DMG)) return;
     }
     if (current.enemies.length === 0) { current.cleared = true; current.doorsClosed = false; onClear(current); }
