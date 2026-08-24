@@ -13,6 +13,11 @@ const SHOOTER_RANGE = 250, SHOOTER_FIRE_CD = 1.3, SHOOTER_SPEED = 70;
 const TANK_R = 26, TANK_HP = 9, TANK_SPEED = 45;
 const ESHOT_SPEED = 280, ESHOT_R = 6, ESHOT_LIFE = 2.4, ESHOT_DMG = 1;
 const ENEMY_COLOR = { chaser: PALETTE.coral, shooter: '#f0a04b', tank: '#8a3a52', boss: '#b0343f' };
+// Кривая сложности по этажам (подобрано на ощупь, крутится безопасно). Этаж 1 —
+// нулевая надбавка: раннее прохождение остаётся мягким.
+const ENEMY_CAP = 12;                       // потолок числа врагов в комнате
+const RAMP_HP = 0.12;                       // +12% HP за каждый этаж после первого
+const RAMP_SPEED = 0.04, SPEED_CAP = 1.4;   // прирост скорости и его потолок
 
 export function createCombat({ audio, hitPlayer, onClear, onEnemyHit }) {
   const shots = [], eShots = [];
@@ -22,7 +27,7 @@ export function createCombat({ audio, hitPlayer, onClear, onEnemyHit }) {
   function spawnEnemies(room, floorNumber) {
     if (room.kind === 'boss') { room.enemies.push(makeEnemy(room.cx, room.cy - 60, 'boss', floorNumber)); return; }
     const it = roomInterior(room);
-    const n = 4 + floorNumber;
+    const n = Math.min(ENEMY_CAP, 4 + floorNumber); // с потолком, иначе глубокие этажи — каша
     for (let i = 0; i < n; i++) {
       room.enemies.push(makeEnemy(rand(it.x0 + 30, it.x1 - 30), rand(it.y0 + 30, it.y1 - 30), pickKind(floorNumber), floorNumber));
     }
@@ -109,19 +114,31 @@ export function createCombat({ audio, hitPlayer, onClear, onEnemyHit }) {
   return { reset, spawnEnemies, fire, update, draw };
 }
 
+// Глубже — меньше простых преследователей, больше стрелков и танков.
 function pickKind(floorNumber) {
   const roll = Math.random();
-  if (roll < 0.25) return 'shooter';
-  if (roll < 0.4 && floorNumber >= 2) return 'tank';
+  const shooterP = Math.min(0.42, 0.22 + floorNumber * 0.03);
+  const tankP = floorNumber >= 2 ? Math.min(0.28, 0.08 + floorNumber * 0.03) : 0;
+  if (roll < shooterP) return 'shooter';
+  if (roll < shooterP + tankP) return 'tank';
   return 'chaser';
 }
 
 function makeEnemy(x, y, kind, floorNumber) {
+  // Босс живёт по своей формуле HP и не попадает под общий множитель этажа.
+  if (kind === 'boss') {
+    const hp = ENEMY_HP * 6 + floorNumber * 4;
+    return { x, y, r: BOSS_R, hp, maxHp: hp, speed: BOSS_SPEED, kind, hitFlash: 0, fireCd: 0, burstCd: BOSS_BURST_CD, burstAngle: 0 };
+  }
   let r = ENEMY_R, hp = ENEMY_HP, speed = ENEMY_SPEED;
-  if (kind === 'boss') { r = BOSS_R; hp = ENEMY_HP * 6 + floorNumber * 4; speed = BOSS_SPEED; }
-  else if (kind === 'shooter') { r = 14; hp = 2; speed = SHOOTER_SPEED; }
+  if (kind === 'shooter') { r = 14; hp = 2; speed = SHOOTER_SPEED; }
   else if (kind === 'tank') { r = TANK_R; hp = TANK_HP; speed = TANK_SPEED; }
-  return { x, y, r, hp, maxHp: hp, speed, kind, hitFlash: 0, fireCd: rand(0.5, SHOOTER_FIRE_CD), burstCd: BOSS_BURST_CD, burstAngle: 0 };
+  // Крепче и чуть шустрее с глубиной, но скорость — с потолком, чтобы враг не
+  // превратился в неотбиваемую пулю.
+  const depth = floorNumber - 1;
+  hp = Math.max(1, Math.round(hp * (1 + depth * RAMP_HP)));
+  speed *= Math.min(SPEED_CAP, 1 + depth * RAMP_SPEED);
+  return { x, y, r, hp, maxHp: hp, speed, kind, hitFlash: 0, fireCd: rand(0.5, SHOOTER_FIRE_CD) };
 }
 
 function rand(lo, hi) { return lo + Math.random() * (hi - lo); }
