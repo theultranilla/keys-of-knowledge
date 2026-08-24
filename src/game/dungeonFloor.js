@@ -138,16 +138,36 @@ export function drawRooms(ctx, floor) {
   // стены
   ctx.fillStyle = '#151b34';
   for (const room of floor.rooms) for (const r of roomWalls(room)) ctx.fillRect(r.x, r.y, r.w, r.h);
-  // сундуки (сокровищница/награда босса)
+  // пикапы (монеты/лечение), выпавшие с боёв
+  for (const room of floor.rooms) if (room.pickups) for (const p of room.pickups) {
+    ctx.fillStyle = p.kind === 'coin' ? '#f6d24d' : '#e0645f';
+    ctx.beginPath();
+    ctx.arc(p.x, p.y, 8, 0, Math.PI * 2);
+    ctx.fill();
+  }
+
+  // сундуки-выбор + прилавки лавки (с подписями)
   ctx.textAlign = 'center';
   ctx.textBaseline = 'middle';
-  ctx.font = 'bold 18px sans-serif';
-  for (const room of floor.rooms) if (room.chests) for (const ch of room.chests) {
-    if (ch.opened) continue;
-    ctx.fillStyle = ch.color;
-    ctx.fillRect(ch.x - 14, ch.y - 14, 28, 28);
-    ctx.fillStyle = '#15151f';
-    ctx.fillText(ch.label, ch.x, ch.y + 1);
+  for (const room of floor.rooms) {
+    if (room.chests) for (const ch of room.chests) {
+      if (ch.opened) continue;
+      ctx.fillStyle = ch.color;
+      ctx.fillRect(ch.x - 14, ch.y - 14, 28, 28);
+      ctx.fillStyle = '#15151f';
+      ctx.font = 'bold 18px sans-serif';
+      ctx.fillText(ch.label, ch.x, ch.y + 1);
+    }
+    if (room.stands) for (const st of room.stands) {
+      if (st.bought) continue;
+      ctx.fillStyle = st.color;
+      ctx.fillRect(st.x - 16, st.y - 16, 32, 32);
+      ctx.fillStyle = '#15151f';
+      ctx.font = 'bold 11px sans-serif';
+      ctx.fillText(st.label, st.x, st.y - 4);
+      ctx.font = 'bold 12px sans-serif';
+      ctx.fillText(String(st.cost), st.x, st.y + 9);
+    }
   }
   ctx.textAlign = 'left';
 
@@ -180,6 +200,23 @@ export function spawnChests(floor) {
 export function bossReward(room) {
   const s = SUBJECTS[(Math.random() * SUBJECTS.length) | 0];
   return [{ x: room.cx, y: room.cy + 70, subject: s.subject, reward: s.reward, color: s.color, label: s.label, opened: false }];
+}
+
+// --- лавка: прилавки за монеты ---
+const STANDS = [
+  { reward: 'damage', cost: 8, color: '#f2c14b', label: 'Урон' },
+  { reward: 'maxhp', cost: 8, color: '#5ea0ff', label: 'HP' },
+  { reward: 'heal', cost: 5, color: '#e0645f', label: 'Лечь' }
+];
+
+export function spawnShop(floor) {
+  for (const room of floor.rooms) {
+    if (room.kind !== 'shop') continue;
+    room.stands = STANDS.map((s, i) => ({
+      x: room.cx + (i - 1) * 92, y: room.cy - 24,
+      reward: s.reward, cost: s.cost, color: s.color, label: s.label, bought: false
+    }));
+  }
 }
 
 function shuffle(arr) {

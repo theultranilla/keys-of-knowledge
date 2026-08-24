@@ -2,7 +2,7 @@ import { VIEW_WIDTH, VIEW_HEIGHT, PALETTE, PLAYER_WIDTH, PLAYER_HEIGHT } from '.
 import { drawCharacter } from '../engine/character.js';
 import { DEFAULT_SKIN } from './skins.js';
 import {
-  generateFloor, roomInterior, roomContains, allWalls, drawRooms, spawnChests, bossReward,
+  generateFloor, roomInterior, roomContains, allWalls, drawRooms, spawnChests, spawnShop, bossReward,
   ROOM_W, ROOM_H, WALL
 } from './dungeonFloor.js';
 import { createDungeonTouch } from './dungeonTouch.js';
@@ -27,7 +27,7 @@ export function createDungeonSession({ input, audio, save, canvas, modal, tasks 
   const player = {
     x: 0, y: 0, width: PLAYER_WIDTH, height: PLAYER_HEIGHT,
     prevX: 0, prevY: 0, aim: { x: 1, y: 0 }, facing: 1,
-    hp: PLAYER_HP, maxHp: PLAYER_HP, hurtCd: 0, dmgMul: 1
+    hp: PLAYER_HP, maxHp: PLAYER_HP, hurtCd: 0, dmgMul: 1, coins: 0
   };
   let busy = false; // пока открыта карточка задачи — мир стоит
   let skin = save?.equipped ?? DEFAULT_SKIN;
@@ -43,6 +43,7 @@ export function createDungeonSession({ input, audio, save, canvas, modal, tasks 
   function newFloor(n) {
     floor = generateFloor(n);
     spawnChests(floor); // сундуки-выбор в сокровищницах
+    spawnShop(floor);   // прилавки в лавках
     current = floor.start;
     current.visited = true;
     player.x = current.cx - player.width / 2;
@@ -85,6 +86,8 @@ export function createDungeonSession({ input, audio, save, canvas, modal, tasks 
     trackRoom();
     maybeActivate(); // двери запираем, только когда игрок уже внутри (не в проёме)
     tryChest();      // рядом с сундуком — открыть задачу
+    tryShop();       // рядом с прилавком — купить за монеты
+    collectPickups();
     aimAndFire();
     updateShots(dt);
     updateEnemyShots(dt);
@@ -228,7 +231,7 @@ export function createDungeonSession({ input, audio, save, canvas, modal, tasks 
     player.hurtCd = CONTACT_CD;
     audio?.play?.('hurt');
     if (player.hp <= 0) {
-      player.maxHp = PLAYER_HP; player.dmgMul = 1;
+      player.maxHp = PLAYER_HP; player.dmgMul = 1; player.coins = 0;
       newFloor(1); player.hp = player.maxHp;
       return true;
     }
@@ -275,6 +278,8 @@ export function createDungeonSession({ input, audio, save, canvas, modal, tasks 
       if (current.kind === 'boss') {
         current.portal = { x: current.cx, y: current.cy - ROOM_H / 2 + WALL + 46 };
         current.chests = bossReward(current); // награда за босса
+      } else {
+        current.pickups = dropCoins(current); // с обычного боя падают монеты
       }
     }
   }
@@ -310,6 +315,40 @@ export function createDungeonSession({ input, audio, save, canvas, modal, tasks 
     else if (reward === 'maxhp') { const add = strong ? 3 : 2; player.maxHp += add; player.hp += add; }
     else if (reward === 'heal') player.hp = Math.min(player.maxHp, player.hp + (strong ? 4 : 3));
     audio?.play?.('key');
+  }
+
+  function dropCoins(room) {
+    const it = roomInterior(room), arr = [];
+    const n = 3 + ((Math.random() * 3) | 0); // 3–5 монет
+    for (let i = 0; i < n; i++) arr.push({ x: rand(it.x0 + 40, it.x1 - 40), y: rand(it.y0 + 40, it.y1 - 40), kind: 'coin', value: 2 });
+    if (Math.random() < 0.4) arr.push({ x: rand(it.x0 + 40, it.x1 - 40), y: rand(it.y0 + 40, it.y1 - 40), kind: 'heal', value: 2 });
+    return arr;
+  }
+
+  function collectPickups() {
+    if (!current.pickups) return;
+    const c = center();
+    for (let i = current.pickups.length - 1; i >= 0; i--) {
+      const p = current.pickups[i];
+      if (Math.hypot(c.x - p.x, c.y - p.y) > 28) continue;
+      if (p.kind === 'coin') player.coins += p.value;
+      else player.hp = Math.min(player.maxHp, player.hp + p.value);
+      audio?.play?.('coin');
+      current.pickups.splice(i, 1);
+    }
+  }
+
+  function tryShop() {
+    if (!current.stands) return;
+    const c = center();
+    for (const st of current.stands) {
+      if (st.bought || player.coins < st.cost) continue;
+      if (Math.hypot(c.x - st.x, c.y - st.y) < 30) {
+        player.coins -= st.cost;
+        st.bought = true;
+        applyReward(st.reward, true); // покупка — базовая версия награды
+      }
+    }
   }
 
   function render(ctx, alpha) {
@@ -375,6 +414,11 @@ export function createDungeonSession({ input, audio, save, canvas, modal, tasks 
     const x = 18, y = 18, w = 220, h = 20;
     ctx.fillStyle = 'rgba(0,0,0,0.5)'; ctx.fillRect(x, y, w, h);
     ctx.fillStyle = PALETTE.coral; ctx.fillRect(x + 3, y + 3, (w - 6) * Math.max(0, player.hp / player.maxHp), h - 6);
+    ctx.fillStyle = '#f6d24d';
+    ctx.font = 'bold 16px sans-serif';
+    ctx.textAlign = 'left';
+    ctx.textBaseline = 'alphabetic';
+    ctx.fillText('Монеты: ' + player.coins, x, y + h + 20);
   }
 
   return {
