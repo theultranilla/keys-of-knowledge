@@ -44,6 +44,7 @@ const state = createState(onSceneChange);
 let session = null;
 let tasks = null;
 let currentLevelId = null;
+let isDungeon = false; // текущий режим: платформер или данж (у них разное тач-управление)
 
 const menu = createMenu({
   mount: document.body,
@@ -101,6 +102,7 @@ function startLevel(id) {
   if (!level) return;
 
   session?.destroy?.(); // прошлый режим мог навесить слушатели (данж) — снимаем
+  isDungeon = false;
   currentLevelId = id;
   // Сид уровня лежит в сохранении: пока уровень не пройден, задачи в нём те же.
   tasks = createTaskEngine({ runSeed: save.seedFor(id) });
@@ -122,6 +124,7 @@ function startLevel(id) {
 // Запуск режима «Данж» (рогалик). Общий слой берём тот же, что у платформера.
 function startDungeon() {
   session?.destroy?.();
+  isDungeon = true;
   currentLevelId = null;
   session = createDungeonSession({ input, audio, save, canvas });
   state.go(SCENE.PLAYING);
@@ -143,7 +146,7 @@ function finishLevel(id, result) {
 
 function onSceneChange(scene) {
   if (scene !== SCENE.COMPLETE && scene !== SCENE.PAUSED) overlays.hide();
-  touch.setPlaying(scene === SCENE.PLAYING);
+  touch.setPlaying(scene === SCENE.PLAYING, !isDungeon);
 
   switch (scene) {
     case SCENE.MENU:

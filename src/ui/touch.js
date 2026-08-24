@@ -9,6 +9,7 @@ import { t } from './i18n.js';
 export function createTouchControls({ mount, input, onPause }) {
   let touched = false;
   let playing = false;
+  let padAllowed = true; // в режиме данжа платформенные кнопки прячем (там свои джойстики)
 
   const pad = el('div', { class: 'touch', hidden: true },
     el('div', { class: 'touch__cluster touch__cluster--left' },
@@ -76,20 +77,23 @@ export function createTouchControls({ mount, input, onPause }) {
     'touchstart',
     () => {
       touched = true;
-      pad.hidden = !playing;
-      respawn.hidden = !playing;
+      pad.hidden = !(playing && padAllowed);
+      respawn.hidden = !(playing && padAllowed);
     },
     { once: true, passive: true }
   );
 
   return {
-    // Показываем только во время игры: поверх меню кнопки только мешают.
-    setPlaying(value) {
+    // Показываем только во время игры. showPad=false — режим данжа: платформенные
+    // кнопки прячем, но паузу оставляем (Esc на телефоне нажать нечем).
+    setPlaying(value, showPad = true) {
       playing = value;
-      pad.hidden = !(value && touched);
-      respawn.hidden = !(value && touched);
+      padAllowed = showPad;
+      const padOn = value && touched && showPad;
+      pad.hidden = !padOn;
+      respawn.hidden = !padOn;
       pause.hidden = !value;
-      if (!value) {
+      if (!value || !showPad) {
         for (const action of ['left', 'right', 'jump', 'interact']) input.setAction(action, false);
       }
     }
