@@ -210,11 +210,14 @@ const STANDS = [
 ];
 
 export function spawnShop(floor) {
+  // Дороже с глубиной: там больше врагов и элиток, монет тоже больше — иначе
+  // поздние лавки бесплатны и обесценивают выбор.
+  const mul = 1 + (floor.floorNumber - 1) * 0.5;
   for (const room of floor.rooms) {
     if (room.kind !== 'shop') continue;
     room.stands = STANDS.map((s, i) => ({
       x: room.cx + (i - 1) * 92, y: room.cy - 24,
-      reward: s.reward, cost: s.cost, color: s.color, label: s.label, bought: false
+      reward: s.reward, cost: Math.round(s.cost * mul), color: s.color, label: s.label, bought: false
     }));
   }
 }

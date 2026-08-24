@@ -222,7 +222,7 @@ export function createDungeonSession({ input, audio, save, canvas, modal, tasks,
     spawnSparks(x, y, death);
     if (death && elite) {
       current.pickups = current.pickups || [];
-      current.pickups.push({ x, y, kind: 'coin', value: 4 });
+      current.pickups.push({ x, y, kind: 'coin', value: 4 + Math.floor(floor.floorNumber / 2) });
     }
   }
 
@@ -278,8 +278,9 @@ export function createDungeonSession({ input, audio, save, canvas, modal, tasks,
 
   function dropCoins(room) {
     const it = roomInterior(room), arr = [];
+    const value = 2 + Math.floor(floor.floorNumber / 3); // монеты дороже с глубиной — под растущие цены
     const n = 3 + ((Math.random() * 3) | 0); // 3–5 монет
-    for (let i = 0; i < n; i++) arr.push({ x: rand(it.x0 + 40, it.x1 - 40), y: rand(it.y0 + 40, it.y1 - 40), kind: 'coin', value: 2 });
+    for (let i = 0; i < n; i++) arr.push({ x: rand(it.x0 + 40, it.x1 - 40), y: rand(it.y0 + 40, it.y1 - 40), kind: 'coin', value });
     if (Math.random() < 0.4) arr.push({ x: rand(it.x0 + 40, it.x1 - 40), y: rand(it.y0 + 40, it.y1 - 40), kind: 'heal', value: 2 });
     return arr;
   }
@@ -319,7 +320,7 @@ export function createDungeonSession({ input, audio, save, canvas, modal, tasks,
       if (Math.hypot(c.x - st.x, c.y - st.y) < 30) {
         player.coins -= st.cost;
         st.bought = true;
-        applyReward(st.reward, true); // покупка — базовая версия награды
+        applyReward(st.reward, false); // заплатил монетами — даём сильную версию
       }
     }
   }
