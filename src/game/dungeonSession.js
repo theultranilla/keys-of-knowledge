@@ -7,7 +7,7 @@ import {
 } from './dungeonFloor.js';
 import { createDungeonTouch } from './dungeonTouch.js';
 import { createCombat } from './dungeonCombat.js';
-import { drawMinimap, drawHp } from './dungeonHud.js';
+import { drawMinimap, drawHp, drawEnemiesLeft, drawFloorBanner } from './dungeonHud.js';
 import { prefersReducedMotion } from '../engine/motion.js';
 
 // Режим «Данж» (рогалик в духе Soul Knight). Этаж — карта комнат с дверями, камера держит
@@ -17,6 +17,7 @@ import { prefersReducedMotion } from '../engine/motion.js';
 
 const MOVE_SPEED = 235, FIRE_COOLDOWN = 0.14, MUZZLE_TIME = 0.05;
 const PLAYER_HP = 6, CONTACT_CD = 0.8, CAM_SMOOTH = 8, PORTAL_R = 30;
+const BANNER_TIME = 1.6; // сколько держится баннер «Этаж N» при входе
 
 export function createDungeonSession({ input, audio, save, canvas, modal, tasks, onDeath }) {
   const player = {
@@ -31,6 +32,7 @@ export function createDungeonSession({ input, audio, save, canvas, modal, tasks,
   const cam = { x: 0, y: 0, prevX: 0, prevY: 0 };
   let firing = false, fireCd = 0, muzzle = 0;
   let shake = 0, walkPhase = 0, moving = false;
+  let bannerTime = 0; // таймер баннера «Этаж N»
   const sparks = [];
 
   const combat = createCombat({
@@ -52,7 +54,7 @@ export function createDungeonSession({ input, audio, save, canvas, modal, tasks,
     player.x = current.cx - player.width / 2;
     player.y = current.cy - player.height / 2;
     player.prevX = player.x; player.prevY = player.y;
-    combat.reset(); sparks.length = 0; shake = 0;
+    combat.reset(); sparks.length = 0; shake = 0; bannerTime = BANNER_TIME;
     cam.x = current.cx - VIEW_WIDTH / 2; cam.y = current.cy - VIEW_HEIGHT / 2;
     cam.prevX = cam.x; cam.prevY = cam.y;
   }
@@ -85,6 +87,7 @@ export function createDungeonSession({ input, audio, save, canvas, modal, tasks,
     if (muzzle > 0) muzzle -= dt;
     if (player.hurtCd > 0) player.hurtCd -= dt;
     if (shake > 0) shake = Math.max(0, shake - 40 * dt);
+    if (bannerTime > 0) bannerTime -= dt;
 
     move(dt);
     clampToRooms();  // страховка: никогда не оказаться за пределами всех комнат
@@ -315,7 +318,10 @@ export function createDungeonSession({ input, audio, save, canvas, modal, tasks,
 
     ctx.restore();
     drawMinimap(ctx, floor, current);
-    drawHp(ctx, player);
+    drawHp(ctx, player, floor.floorNumber);
+    const foes = current.spawned && !current.cleared ? current.enemies.length : 0;
+    drawEnemiesLeft(ctx, foes);
+    drawFloorBanner(ctx, floor.floorNumber, bannerTime / 0.5); // альфа>1 держит баннер, <1 гасит
     touch.draw(ctx); // джойстики поверх (только когда есть касания)
   }
 

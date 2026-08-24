@@ -85,7 +85,11 @@ const ru = {
   'defeat.floor': 'Дошёл до этажа',
   'defeat.coins': 'Собрано монет',
   'defeat.retry': 'Ещё раз',
-  'defeat.toMenu': 'В меню'
+  'defeat.toMenu': 'В меню',
+
+  'dungeon.floor': 'Этаж {n}',
+  'dungeon.coins': 'Монеты: {n}',
+  'dungeon.enemiesLeft': 'Врагов: {n}'
 };
 
 const dictionaries = { ru };

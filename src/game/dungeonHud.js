@@ -1,8 +1,10 @@
-import { VIEW_WIDTH, PALETTE } from '../engine/constants.js';
+import { VIEW_WIDTH, VIEW_HEIGHT, PALETTE } from '../engine/constants.js';
+import { t } from '../ui/i18n.js';
 
-// Экранный слой данжа: миникарта этажа и полоска здоровья с монетами. Рисуется
-// поверх мира (без смещения камеры), потому вынесен из сессии — это чистая
-// отрисовка от состояния, без своей логики.
+// Экранный слой данжа: миникарта этажа, полоска здоровья с этажом/монетами,
+// счётчик оставшихся врагов и баннер при входе на этаж. Рисуется поверх мира
+// (без смещения камеры), потому вынесен из сессии — это чистая отрисовка от
+// состояния, без своей логики.
 
 const MINI_KIND = {
   start: '#5ac888', combat: '#96a0be', boss: '#e05a67', treasure: '#f6d24d', shop: '#9e73ee'
@@ -29,7 +31,7 @@ export function drawMinimap(ctx, floor, current) {
   }
 }
 
-export function drawHp(ctx, player) {
+export function drawHp(ctx, player, floorNumber) {
   const x = 18, y = 18, w = 220, h = 20;
   ctx.fillStyle = 'rgba(0,0,0,0.5)';
   ctx.fillRect(x, y, w, h);
@@ -39,5 +41,31 @@ export function drawHp(ctx, player) {
   ctx.font = 'bold 16px sans-serif';
   ctx.textAlign = 'left';
   ctx.textBaseline = 'alphabetic';
-  ctx.fillText('Монеты: ' + player.coins, x, y + h + 20);
+  ctx.fillText(t('dungeon.floor', { n: floorNumber }) + '    ' + t('dungeon.coins', { n: player.coins }), x, y + h + 20);
+}
+
+// Счётчик оставшихся врагов — только когда бой идёт (иначе не мешаем взгляду).
+export function drawEnemiesLeft(ctx, count) {
+  if (count <= 0) return;
+  ctx.fillStyle = '#e05a67';
+  ctx.font = 'bold 18px sans-serif';
+  ctx.textAlign = 'center';
+  ctx.textBaseline = 'top';
+  ctx.fillText(t('dungeon.enemiesLeft', { n: count }), VIEW_WIDTH / 2, 16);
+  ctx.textAlign = 'left';
+}
+
+// Баннер «Этаж N» при входе: крупно по центру, гаснет к концу таймера.
+export function drawFloorBanner(ctx, floorNumber, alpha) {
+  if (alpha <= 0) return;
+  ctx.save();
+  ctx.globalAlpha = Math.min(1, alpha);
+  ctx.fillStyle = PALETTE.amber;
+  ctx.font = 'bold 52px sans-serif';
+  ctx.textAlign = 'center';
+  ctx.textBaseline = 'middle';
+  ctx.fillText(t('dungeon.floor', { n: floorNumber }), VIEW_WIDTH / 2, VIEW_HEIGHT * 0.34);
+  ctx.restore();
+  ctx.textAlign = 'left';
+  ctx.textBaseline = 'alphabetic';
 }
