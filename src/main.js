@@ -80,6 +80,7 @@ const overlays = createOverlays({
     settings: () => state.go(SCENE.SETTINGS),
     toMenu: () => state.go(SCENE.MENU),
     retry: () => startLevel(currentLevelId),
+    restartDungeon: () => startDungeon(),
     next: () => startLevel(order[order.indexOf(currentLevelId) + 1])
   }
 });
@@ -127,7 +128,14 @@ function startDungeon() {
   isDungeon = true;
   currentLevelId = null;
   tasks = createTaskEngine({ runSeed: Date.now() });
-  session = createDungeonSession({ input, audio, save, canvas, modal, tasks });
+  session = createDungeonSession({
+    input, audio, save, canvas, modal, tasks,
+    // Смерть в данже: показываем итог забега поверх замершего мира.
+    onDeath: (summary) => {
+      overlays.showDefeat(summary);
+      state.go(SCENE.DEFEAT);
+    }
+  });
   state.go(SCENE.PLAYING);
 }
 
@@ -146,7 +154,7 @@ function finishLevel(id, result) {
 }
 
 function onSceneChange(scene) {
-  if (scene !== SCENE.COMPLETE && scene !== SCENE.PAUSED) overlays.hide();
+  if (scene !== SCENE.COMPLETE && scene !== SCENE.PAUSED && scene !== SCENE.DEFEAT) overlays.hide();
   touch.setPlaying(scene === SCENE.PLAYING, !isDungeon);
 
   switch (scene) {

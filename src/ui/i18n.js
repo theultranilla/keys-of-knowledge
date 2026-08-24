@@ -78,7 +78,14 @@ const ru = {
   'complete.toMenu': 'В меню',
   'complete.star.done': 'Уровень пройден',
   'complete.star.coins': 'Собрано больше 80% монет',
-  'complete.star.clean': 'Все задачи решены без разбора'
+  'complete.star.clean': 'Все задачи решены без разбора',
+
+  'defeat.title': 'Ты пал',
+  'defeat.subtitle': 'Знания кончились раньше врагов',
+  'defeat.floor': 'Дошёл до этажа',
+  'defeat.coins': 'Собрано монет',
+  'defeat.retry': 'Ещё раз',
+  'defeat.toMenu': 'В меню'
 };
 
 const dictionaries = { ru };

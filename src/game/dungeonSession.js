@@ -18,13 +18,14 @@ import { prefersReducedMotion } from '../engine/motion.js';
 const MOVE_SPEED = 235, FIRE_COOLDOWN = 0.14, MUZZLE_TIME = 0.05;
 const PLAYER_HP = 6, CONTACT_CD = 0.8, CAM_SMOOTH = 8, PORTAL_R = 30;
 
-export function createDungeonSession({ input, audio, save, canvas, modal, tasks }) {
+export function createDungeonSession({ input, audio, save, canvas, modal, tasks, onDeath }) {
   const player = {
     x: 0, y: 0, width: PLAYER_WIDTH, height: PLAYER_HEIGHT,
     prevX: 0, prevY: 0, aim: { x: 1, y: 0 }, facing: 1,
     hp: PLAYER_HP, maxHp: PLAYER_HP, hurtCd: 0, dmgMul: 1, coins: 0
   };
   let busy = false; // пока открыта карточка задачи — мир стоит
+  let dead = false; // игрок погиб — забег заморожен до перезапуска
   let skin = save?.equipped ?? DEFAULT_SKIN;
   const pointer = { x: VIEW_WIDTH * 0.7, y: VIEW_HEIGHT / 2 };
   const cam = { x: 0, y: 0, prevX: 0, prevY: 0 };
@@ -77,7 +78,7 @@ export function createDungeonSession({ input, audio, save, canvas, modal, tasks 
   window.addEventListener('pointerup', onUp);
 
   function update(dt) {
-    if (busy) return; // открыта карточка задачи — мир стоит
+    if (busy || dead) return; // карточка задачи открыта или забег окончен — мир стоит
     player.prevX = player.x; player.prevY = player.y;
     cam.prevX = cam.x; cam.prevY = cam.y;
     if (fireCd > 0) fireCd -= dt;
@@ -179,15 +180,16 @@ export function createDungeonSession({ input, audio, save, canvas, modal, tasks 
 
   // Урон игроку (зовёт бой). true — если погиб (забег сброшен).
   function hitPlayer(dmg) {
-    if (player.hurtCd > 0) return false;
+    if (player.hurtCd > 0 || dead) return false;
     player.hp = Math.max(0, player.hp - dmg);
     player.hurtCd = CONTACT_CD;
     addShake(7);
     audio?.play?.('hurt');
     if (player.hp <= 0) {
-      player.maxHp = PLAYER_HP; player.dmgMul = 1; player.coins = 0;
-      newFloor(1); player.hp = player.maxHp;
-      return true;
+      dead = true;
+      audio?.play?.('wrong'); // мягкий низкий сигнал: забег окончен
+      onDeath?.({ floor: floor.floorNumber, coins: player.coins });
+      return true; // бой прекращает обработку этого кадра
     }
     return false;
   }

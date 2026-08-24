@@ -12,7 +12,9 @@ export const SCENE = {
   // Открыта карточка с задачей: мир стоит, но это не пауза — выйти из неё
   // можно только через саму карточку.
   TASK: 'task',
-  COMPLETE: 'complete'
+  COMPLETE: 'complete',
+  // Игрок погиб в данже: забег окончен, мир под оверлеем замер.
+  DEFEAT: 'defeat'
 };
 
 export function createState(onChange) {

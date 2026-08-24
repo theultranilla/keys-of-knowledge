@@ -59,7 +59,23 @@ export function createOverlays({ mount, on }) {
     ]);
   }
 
-  return { showPause, showComplete, hide };
+  // Экран поражения в данже. Итоги забега и выбор: заново или в меню.
+  function showDefeat(summary) {
+    show([
+      el('h2', { class: 'screen__title', text: t('defeat.title') }),
+      el('p', { class: 'screen__subtitle', text: t('defeat.subtitle') }),
+      el('dl', { class: 'complete__facts' },
+        el('dt', { text: t('defeat.floor') }),
+        el('dd', { text: String(summary.floor) }),
+        el('dt', { text: t('defeat.coins') }),
+        el('dd', { text: String(summary.coins) })),
+      el('div', { class: 'screen__actions' },
+        button('screen__button screen__button--primary', t('defeat.retry'), on.restartDungeon),
+        button('screen__button', t('defeat.toMenu'), on.toMenu))
+    ]);
+  }
+
+  return { showPause, showComplete, showDefeat, hide };
 }
 
 export function formatTime(ms) {
