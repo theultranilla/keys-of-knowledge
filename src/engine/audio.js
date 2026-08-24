@@ -89,6 +89,10 @@ export function createAudio(settings = { sound: true }) {
     shoot: () => tone({ from: 660, to: 500, type: 'square', duration: 0.05, gain: 0.05 }),
     enemyHit: () => tone({ from: 320, to: 230, type: 'triangle', duration: 0.06, gain: 0.1 }),
     enemyDie: () => tone({ from: 300, to: 80, type: 'sawtooth', duration: 0.18, gain: 0.16 }),
+    // Залп босса — ниже и весомее выстрела игрока, чтобы на слух отличать чужую атаку.
+    bossShot: () => tone({ from: 300, to: 140, type: 'square', duration: 0.14, gain: 0.11 }),
+    // Выезд шипов: короткий металлический «шшк» — слышно предупреждение, даже не глядя.
+    trap: () => tone({ from: 700, to: 260, type: 'sawtooth', duration: 0.08, gain: 0.07 }),
     complete: () => {
       [NOTE.c5, NOTE.e5, NOTE.g5, NOTE.c6].forEach((note, index) =>
         tone({ from: note, duration: 0.4, gain: 0.16, delay: index * 0.12 })

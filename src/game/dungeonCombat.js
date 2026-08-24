@@ -94,7 +94,7 @@ export function createCombat({ audio, hitPlayer, onClear, onEnemyHit }) {
           }
           e.burstAngle += 0.4;
           e.burstCd = BOSS_BURST_CD;
-          audio?.play?.('shoot');
+          audio?.play?.('bossShot');
         }
       }
       e.x = Math.max(it.x0 + e.r, Math.min(it.x1 - e.r, e.x));

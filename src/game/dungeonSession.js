@@ -34,6 +34,7 @@ export function createDungeonSession({ input, audio, save, canvas, modal, tasks,
   let shake = 0, walkPhase = 0, moving = false;
   let bannerTime = 0; // таймер баннера «Этаж N»
   let time = 0; // часы забега — по ним пульсируют ловушки
+  let trapsWereOut = false; // для звука выезда шипов — ловим фронт
   const sparks = [];
 
   const combat = createCombat({
@@ -91,6 +92,10 @@ export function createDungeonSession({ input, audio, save, canvas, modal, tasks,
     if (shake > 0) shake = Math.max(0, shake - 40 * dt);
     if (bannerTime > 0) bannerTime -= dt;
     time += dt; // ход часов замирает вместе с миром (после guard) — ловушки честно стоят на паузе
+    // Звук выезда шипов — на нарастающем фронте и только в комнате с ловушками.
+    const out = trapsOut(time);
+    if (out && !trapsWereOut && current.traps) audio?.play?.('trap');
+    trapsWereOut = out;
 
     move(dt);
     clampToRooms();  // страховка: никогда не оказаться за пределами всех комнат
