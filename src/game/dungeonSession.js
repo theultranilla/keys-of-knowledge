@@ -3,25 +3,20 @@ import { drawCharacter } from '../engine/character.js';
 import { DEFAULT_SKIN } from './skins.js';
 import {
   generateFloor, roomInterior, roomContains, allWalls, drawRooms, spawnChests, spawnShop, bossReward,
-  ROOM_W, ROOM_H, WALL
+  ROOM_H, WALL
 } from './dungeonFloor.js';
 import { createDungeonTouch } from './dungeonTouch.js';
+import { createCombat } from './dungeonCombat.js';
+import { drawMinimap, drawHp } from './dungeonHud.js';
+import { prefersReducedMotion } from '../engine/motion.js';
 
-// Режим «Данж» (рогалик в духе Soul Knight). Этаж — карта комнат с дверями. Камера
-// держит текущую комнату (Soul Knight-стайл), боевые запираются до зачистки, за боссом
-// портал на следующий этаж. Рисует сцену сам; общий слой (звук/сохранения/скины) общий.
-// Задачи/награды в комнатах — следующий этап.
+// Режим «Данж» (рогалик в духе Soul Knight). Этаж — карта комнат с дверями, камера держит
+// текущую комнату, боевые запираются до зачистки, за боссом портал. Сессия владеет игроком,
+// камерой, экономикой и сборкой кадра; бой вынесен в dungeonCombat, общий слой (звук/скины/
+// тач) — общий с платформером.
 
-// Числа геймплея — на ощупь, крутить можно.
-const MOVE_SPEED = 235;
-const FIRE_COOLDOWN = 0.14, SHOT_SPEED = 560, SHOT_LIFE = 1.1, SHOT_R = 5, SHOT_DMG = 1, MUZZLE_TIME = 0.05;
-const ENEMY_SPEED = 95, ENEMY_HP = 3, ENEMY_R = 15, HIT_FLASH = 0.08;
-const BOSS_R = 30, BOSS_SPEED = 60;
-const SHOOTER_RANGE = 250, SHOOTER_FIRE_CD = 1.3, SHOOTER_SPEED = 70;
-const TANK_R = 26, TANK_HP = 9, TANK_SPEED = 45;
-const ESHOT_SPEED = 280, ESHOT_R = 6, ESHOT_LIFE = 2.4, ESHOT_DMG = 1;
-const PLAYER_HP = 6, CONTACT_DMG = 1, CONTACT_CD = 0.8;
-const CAM_SMOOTH = 8, PORTAL_R = 30;
+const MOVE_SPEED = 235, FIRE_COOLDOWN = 0.14, MUZZLE_TIME = 0.05;
+const PLAYER_HP = 6, CONTACT_CD = 0.8, CAM_SMOOTH = 8, PORTAL_R = 30;
 
 export function createDungeonSession({ input, audio, save, canvas, modal, tasks }) {
   const player = {
@@ -34,8 +29,15 @@ export function createDungeonSession({ input, audio, save, canvas, modal, tasks 
   const pointer = { x: VIEW_WIDTH * 0.7, y: VIEW_HEIGHT / 2 };
   const cam = { x: 0, y: 0, prevX: 0, prevY: 0 };
   let firing = false, fireCd = 0, muzzle = 0;
-  const shots = [];   // снаряды игрока
-  const eShots = [];  // снаряды врагов-стрелков
+  let shake = 0, walkPhase = 0, moving = false;
+  const sparks = [];
+
+  const combat = createCombat({
+    audio,
+    hitPlayer,
+    onClear: onRoomClear,
+    onEnemyHit: spawnSparks
+  });
 
   let floor, current;
   newFloor(1);
@@ -49,17 +51,18 @@ export function createDungeonSession({ input, audio, save, canvas, modal, tasks 
     player.x = current.cx - player.width / 2;
     player.y = current.cy - player.height / 2;
     player.prevX = player.x; player.prevY = player.y;
-    shots.length = 0; eShots.length = 0;
+    combat.reset(); sparks.length = 0; shake = 0;
     cam.x = current.cx - VIEW_WIDTH / 2; cam.y = current.cy - VIEW_HEIGHT / 2;
     cam.prevX = cam.x; cam.prevY = cam.y;
   }
 
   const center = () => ({ x: player.x + player.width / 2, y: player.y + player.height / 2 });
+  // Тряску экрана в спокойном режиме не заводим вовсе (инвариант reduced-motion).
+  const addShake = (v) => { if (!prefersReducedMotion()) shake = Math.max(shake, v); };
 
   // Тач-джойстики (телефон). Мышь их не касается — обрабатываем ниже отдельно.
   const touch = createDungeonTouch({ canvas });
 
-  // --- мышь (ПК): прицел + стрельба. Касания игнорируем — ими рулят джойстики. ---
   const onMove = (e) => {
     if (e.pointerType === 'touch') return;
     const r = canvas.getBoundingClientRect();
@@ -80,25 +83,23 @@ export function createDungeonSession({ input, audio, save, canvas, modal, tasks 
     if (fireCd > 0) fireCd -= dt;
     if (muzzle > 0) muzzle -= dt;
     if (player.hurtCd > 0) player.hurtCd -= dt;
+    if (shake > 0) shake = Math.max(0, shake - 40 * dt);
 
     move(dt);
     clampToRooms();  // страховка: никогда не оказаться за пределами всех комнат
     trackRoom();
     maybeActivate(); // двери запираем, только когда игрок уже внутри (не в проёме)
-    tryChest();      // рядом с сундуком — открыть задачу
-    tryShop();       // рядом с прилавком — купить за монеты
+    tryChest();
+    tryShop();
     collectPickups();
     aimAndFire();
-    updateShots(dt);
-    updateEnemyShots(dt);
-    if (current.spawned && !current.cleared) updateCombat(dt);
+    combat.update(dt, floor, current, center(), player.dmgMul, player.width / 2);
+    updateSparks(dt);
 
-    // камера держит текущую комнату (комната уже уже вьюпорта — просто центрируем её)
     const tx = current.cx - VIEW_WIDTH / 2, ty = current.cy - VIEW_HEIGHT / 2;
     cam.x += (tx - cam.x) * Math.min(1, CAM_SMOOTH * dt);
     cam.y += (ty - cam.y) * Math.min(1, CAM_SMOOTH * dt);
 
-    // портал за боссом
     if (current.portal) {
       const c = center();
       if (Math.hypot(c.x - current.portal.x, c.y - current.portal.y) < PORTAL_R) newFloor(floor.floorNumber + 1);
@@ -110,7 +111,9 @@ export function createDungeonSession({ input, audio, save, canvas, modal, tasks 
     let my = (input.isDown('down') ? 1 : 0) - (input.isDown('up') ? 1 : 0);
     if (touch.state.move.x || touch.state.move.y) { mx = touch.state.move.x; my = touch.state.move.y; }
     const mag = Math.hypot(mx, my);
+    moving = mag > 0.15;
     if (mag < 0.001) return;
+    if (moving) walkPhase += dt * 14; // фаза «шага» для покачивания
     const nx = mx / mag, ny = my / mag;
     const speed = MOVE_SPEED * Math.min(1, mag); // наклон стика = скорость (аналог)
     const walls = allWalls(floor);
@@ -132,21 +135,21 @@ export function createDungeonSession({ input, audio, save, canvas, modal, tasks 
     const c = center();
     if (roomContains(current, c.x, c.y)) return;
     for (const room of floor.rooms) {
-      if (room !== current && roomContains(room, c.x, c.y)) {
-        current = room;
-        room.visited = true;
-        return;
-      }
+      if (room !== current && roomContains(room, c.x, c.y)) { current = room; room.visited = true; return; }
     }
   }
 
-  // Запираем боевую/босс-комнату, только когда игрок ушёл вглубь от проёма — иначе
-  // закрывающаяся дверь вытолкнула бы его наружу.
+  // Запираем боевую/босс, только когда игрок ушёл вглубь от проёма — иначе закрывающаяся
+  // дверь вытолкнула бы его наружу.
   function maybeActivate() {
     if (current.spawned || current.cleared) return;
     if (current.kind !== 'combat' && current.kind !== 'boss') return;
     const it = roomInterior(current), c = center();
-    if (c.x > it.x0 + 24 && c.x < it.x1 - 24 && c.y > it.y0 + 24 && c.y < it.y1 - 24) activate(current);
+    if (c.x > it.x0 + 24 && c.x < it.x1 - 24 && c.y > it.y0 + 24 && c.y < it.y1 - 24) {
+      current.spawned = true;
+      current.doorsClosed = true;
+      combat.spawnEnemies(current, floor.floorNumber);
+    }
   }
 
   function clampToRooms() {
@@ -157,41 +160,11 @@ export function createDungeonSession({ input, audio, save, canvas, modal, tasks 
     player.y = Math.max(it.y0, Math.min(it.y1 - player.height, player.y));
   }
 
-  function activate(room) {
-    room.spawned = true;
-    room.doorsClosed = true;
-    const it = roomInterior(room);
-    if (room.kind === 'boss') {
-      room.enemies.push(makeEnemy(room.cx, room.cy - 60, 'boss'));
-    } else {
-      const n = 4 + floor.floorNumber;
-      for (let i = 0; i < n; i++) {
-        const x = rand(it.x0 + 30, it.x1 - 30), y = rand(it.y0 + 30, it.y1 - 30);
-        room.enemies.push(makeEnemy(x, y, pickKind()));
-      }
-    }
-  }
-
-  function pickKind() {
-    const roll = Math.random();
-    if (roll < 0.25) return 'shooter';
-    if (roll < 0.4 && floor.floorNumber >= 2) return 'tank';
-    return 'chaser';
-  }
-
-  function makeEnemy(x, y, kind) {
-    let r = ENEMY_R, hp = ENEMY_HP, speed = ENEMY_SPEED;
-    if (kind === 'boss') { r = BOSS_R; hp = ENEMY_HP * 6 + floor.floorNumber * 4; speed = BOSS_SPEED; }
-    else if (kind === 'shooter') { r = 14; hp = 2; speed = SHOOTER_SPEED; }
-    else if (kind === 'tank') { r = TANK_R; hp = TANK_HP; speed = TANK_SPEED; }
-    return { x, y, r, hp, maxHp: hp, speed, kind, hitFlash: 0, fireCd: rand(0.5, SHOOTER_FIRE_CD) };
-  }
-
   function aimAndFire() {
     const c = center();
     if (touch.state.aiming) {
       const a = touch.state.aim, al = Math.hypot(a.x, a.y);
-      if (al > 0.2) { player.aim.x = a.x / al; player.aim.y = a.y / al; } // мёртвая зона — держим прошлый
+      if (al > 0.2) { player.aim.x = a.x / al; player.aim.y = a.y / al; }
     } else {
       const ax = pointer.x + cam.x - c.x, ay = pointer.y + cam.y - c.y, al = Math.hypot(ax, ay);
       if (al > 0.001) { player.aim.x = ax / al; player.aim.y = ay / al; }
@@ -199,36 +172,17 @@ export function createDungeonSession({ input, audio, save, canvas, modal, tasks 
     player.facing = player.aim.x >= 0 ? 1 : -1;
 
     if ((firing || touch.state.firing) && fireCd <= 0) {
-      shots.push({ x: c.x + player.aim.x * 20, y: c.y + player.aim.y * 20,
-        vx: player.aim.x * SHOT_SPEED, vy: player.aim.y * SHOT_SPEED, life: SHOT_LIFE });
+      combat.fire(c.x, c.y, player.aim);
       fireCd = FIRE_COOLDOWN; muzzle = MUZZLE_TIME;
-      audio?.play?.('shoot');
     }
   }
 
-  function updateShots(dt) {
-    const walls = allWalls(floor);
-    for (let i = shots.length - 1; i >= 0; i--) {
-      const s = shots[i];
-      s.x += s.vx * dt; s.y += s.vy * dt; s.life -= dt;
-      let dead = s.life <= 0 || walls.some((r) => s.x > r.x && s.x < r.x + r.w && s.y > r.y && s.y < r.y + r.h);
-      if (!dead) {
-        for (const e of current.enemies) {
-          if (e.hp > 0 && Math.hypot(s.x - e.x, s.y - e.y) < e.r + SHOT_R) {
-            e.hp -= SHOT_DMG * player.dmgMul; e.hitFlash = HIT_FLASH; dead = true;
-            audio?.play?.('enemyHit'); break;
-          }
-        }
-      }
-      if (dead) shots.splice(i, 1);
-    }
-  }
-
-  // Урон игроку (касание врага или его снаряд). true — если погиб (забег сброшен).
+  // Урон игроку (зовёт бой). true — если погиб (забег сброшен).
   function hitPlayer(dmg) {
     if (player.hurtCd > 0) return false;
     player.hp = Math.max(0, player.hp - dmg);
     player.hurtCd = CONTACT_CD;
+    addShake(7);
     audio?.play?.('hurt');
     if (player.hp <= 0) {
       player.maxHp = PLAYER_HP; player.dmgMul = 1; player.coins = 0;
@@ -238,52 +192,35 @@ export function createDungeonSession({ input, audio, save, canvas, modal, tasks 
     return false;
   }
 
-  function updateEnemyShots(dt) {
-    const walls = allWalls(floor), c = center();
-    for (let i = eShots.length - 1; i >= 0; i--) {
-      const s = eShots[i];
-      s.x += s.vx * dt; s.y += s.vy * dt; s.life -= dt;
-      let dead = s.life <= 0 || walls.some((r) => s.x > r.x && s.x < r.x + r.w && s.y > r.y && s.y < r.y + r.h);
-      if (!dead && Math.hypot(s.x - c.x, s.y - c.y) < ESHOT_R + player.width / 2) {
-        dead = true;
-        if (hitPlayer(ESHOT_DMG)) return;
-      }
-      if (dead) eShots.splice(i, 1);
+  function onRoomClear(room) {
+    if (room.kind === 'boss') {
+      room.portal = { x: room.cx, y: room.cy - ROOM_H / 2 + WALL + 46 };
+      room.chests = bossReward(room);
+      addShake(12);
+    } else {
+      room.pickups = dropCoins(room);
     }
   }
 
-  function updateCombat(dt) {
-    const c = center();
-    for (let i = current.enemies.length - 1; i >= 0; i--) {
-      const e = current.enemies[i];
-      if (e.hitFlash > 0) e.hitFlash -= dt;
-      if (e.hp <= 0) { current.enemies.splice(i, 1); audio?.play?.('enemyDie'); continue; }
-      const dx = c.x - e.x, dy = c.y - e.y, d = Math.hypot(dx, dy) || 1, nx = dx / d, ny = dy / d;
-      if (e.kind === 'shooter') {
-        if (d > SHOOTER_RANGE + 30) { e.x += nx * e.speed * dt; e.y += ny * e.speed * dt; }
-        else if (d < SHOOTER_RANGE - 30) { e.x -= nx * e.speed * dt; e.y -= ny * e.speed * dt; }
-        e.fireCd -= dt;
-        if (e.fireCd <= 0) {
-          eShots.push({ x: e.x, y: e.y, vx: nx * ESHOT_SPEED, vy: ny * ESHOT_SPEED, life: ESHOT_LIFE });
-          e.fireCd = SHOOTER_FIRE_CD;
-        }
-      } else {
-        e.x += nx * e.speed * dt; e.y += ny * e.speed * dt;
-      }
-      if (d < e.r + player.width / 2 && hitPlayer(CONTACT_DMG)) return;
+  // --- искры (полировка) ---
+  function spawnSparks(x, y, death) {
+    if (prefersReducedMotion()) return; // частицы отключены в спокойном режиме
+    const n = death ? 14 : 5;
+    for (let i = 0; i < n; i++) {
+      const a = Math.random() * Math.PI * 2, sp = rand(40, death ? 220 : 130);
+      sparks.push({ x, y, vx: Math.cos(a) * sp, vy: Math.sin(a) * sp, life: rand(0.2, 0.45), maxLife: 0.45, size: rand(2, death ? 5 : 3) });
     }
-    if (current.enemies.length === 0) {
-      current.cleared = true;
-      current.doorsClosed = false; // двери открылись
-      if (current.kind === 'boss') {
-        current.portal = { x: current.cx, y: current.cy - ROOM_H / 2 + WALL + 46 };
-        current.chests = bossReward(current); // награда за босса
-      } else {
-        current.pickups = dropCoins(current); // с обычного боя падают монеты
-      }
+    if (death) addShake(4);
+  }
+  function updateSparks(dt) {
+    for (let i = sparks.length - 1; i >= 0; i--) {
+      const s = sparks[i];
+      s.x += s.vx * dt; s.y += s.vy * dt; s.vx *= 0.9; s.vy *= 0.9; s.life -= dt;
+      if (s.life <= 0) sparks.splice(i, 1);
     }
   }
 
+  // --- сундуки / экономика ---
   function tryChest() {
     if (!current.chests) return;
     const c = center();
@@ -292,8 +229,6 @@ export function createDungeonSession({ input, audio, save, canvas, modal, tasks 
     }
   }
 
-  // Открыть сундук: карточка задачи → решил → награда. «Знания = сила». Пока открыта
-  // карточка, busy=true и мир стоит. Ключ задачи привязан к комнате — вернулся, та же.
   async function openChest(ch) {
     if (busy) return;
     busy = true;
@@ -304,7 +239,7 @@ export function createDungeonSession({ input, audio, save, canvas, modal, tasks 
       `dungeon-f${floor.floorNumber}-r${current.index}-${ch.subject}`);
     const outcome = await modal.open(task, tasks);
     busy = false;
-    if (!outcome.solved) return; // вышел без решения — сундук ждёт
+    if (!outcome.solved) return;
     applyReward(ch.reward, outcome.usedSolution);
     for (const other of current.chests) other.opened = true; // выбор: остальные исчезают
   }
@@ -355,24 +290,18 @@ export function createDungeonSession({ input, audio, save, canvas, modal, tasks 
     ctx.fillStyle = '#0c1226';
     ctx.fillRect(0, 0, VIEW_WIDTH, VIEW_HEIGHT);
 
-    const camX = lerp(cam.prevX, cam.x, alpha), camY = lerp(cam.prevY, cam.y, alpha);
+    let camX = lerp(cam.prevX, cam.x, alpha), camY = lerp(cam.prevY, cam.y, alpha);
+    if (shake > 0.2) { camX += (Math.random() - 0.5) * shake; camY += (Math.random() - 0.5) * shake; }
     ctx.save();
     ctx.translate(-camX, -camY);
 
     drawRooms(ctx, floor);
+    combat.draw(ctx, current);
+    drawSparks(ctx);
 
-    for (const e of current.enemies) {
-      ctx.fillStyle = e.hitFlash > 0 ? '#ffffff' : (ENEMY_COLOR[e.kind] ?? PALETTE.coral);
-      ctx.beginPath(); ctx.arc(e.x, e.y, e.r, 0, Math.PI * 2); ctx.fill();
-    }
-
-    ctx.fillStyle = '#ff8a4b'; // снаряды врагов
-    for (const s of eShots) { ctx.beginPath(); ctx.arc(s.x, s.y, ESHOT_R, 0, Math.PI * 2); ctx.fill(); }
-
-    ctx.fillStyle = PALETTE.chalk; // снаряды игрока
-    for (const s of shots) { ctx.beginPath(); ctx.arc(s.x, s.y, SHOT_R, 0, Math.PI * 2); ctx.fill(); }
-
-    const px = lerp(player.prevX, player.x, alpha), py = lerp(player.prevY, player.y, alpha);
+    const px = lerp(player.prevX, player.x, alpha);
+    const bob = moving ? -Math.abs(Math.sin(walkPhase)) * 3 : 0;
+    const py = lerp(player.prevY, player.y, alpha) + bob;
     drawCharacter(ctx, px, py, player.width, player.height, skin, player.facing);
     const cx = px + player.width / 2, cy = py + player.height / 2;
     ctx.strokeStyle = PALETTE.amber; ctx.lineWidth = 4; ctx.lineCap = 'round';
@@ -383,42 +312,18 @@ export function createDungeonSession({ input, audio, save, canvas, modal, tasks 
     }
 
     ctx.restore();
-    drawMinimap(ctx);
-    drawHp(ctx);
+    drawMinimap(ctx, floor, current);
+    drawHp(ctx, player);
     touch.draw(ctx); // джойстики поверх (только когда есть касания)
   }
 
-  const ENEMY_COLOR = { chaser: PALETTE.coral, shooter: '#f0a04b', tank: '#8a3a52', boss: '#b0343f' };
-  const MINI_KIND = { start: '#5ac888', combat: '#96a0be', boss: '#e05a67', treasure: '#f6d24d', shop: '#9e73ee' };
-  function drawMinimap(ctx) {
-    const step = 16, pad = 8;
-    let minX = Infinity, maxX = -Infinity, minY = Infinity, maxY = -Infinity;
-    for (const r of floor.rooms) {
-      minX = Math.min(minX, r.cell.x); maxX = Math.max(maxX, r.cell.x);
-      minY = Math.min(minY, r.cell.y); maxY = Math.max(maxY, r.cell.y);
+  function drawSparks(ctx) {
+    ctx.fillStyle = '#ffd58a';
+    for (const s of sparks) {
+      ctx.globalAlpha = Math.max(0, s.life / s.maxLife);
+      ctx.fillRect(s.x - s.size / 2, s.y - s.size / 2, s.size, s.size);
     }
-    const w = (maxX - minX + 1) * step + pad * 2, h = (maxY - minY + 1) * step + pad * 2;
-    const ox = VIEW_WIDTH - w - 14, oy = 14;
-    ctx.fillStyle = 'rgba(0,0,0,0.4)'; ctx.fillRect(ox, oy, w, h);
-    for (const r of floor.rooms) {
-      const x = ox + pad + (r.cell.x - minX) * step, y = oy + pad + (r.cell.y - minY) * step;
-      ctx.globalAlpha = r.visited ? 1 : 0.32;
-      ctx.fillStyle = MINI_KIND[r.kind] ?? MINI_KIND.combat;
-      ctx.fillRect(x - 5, y - 5, 10, 10);
-      ctx.globalAlpha = 1;
-      if (r === current) { ctx.strokeStyle = '#fff'; ctx.lineWidth = 2; ctx.strokeRect(x - 7, y - 7, 14, 14); }
-    }
-  }
-
-  function drawHp(ctx) {
-    const x = 18, y = 18, w = 220, h = 20;
-    ctx.fillStyle = 'rgba(0,0,0,0.5)'; ctx.fillRect(x, y, w, h);
-    ctx.fillStyle = PALETTE.coral; ctx.fillRect(x + 3, y + 3, (w - 6) * Math.max(0, player.hp / player.maxHp), h - 6);
-    ctx.fillStyle = '#f6d24d';
-    ctx.font = 'bold 16px sans-serif';
-    ctx.textAlign = 'left';
-    ctx.textBaseline = 'alphabetic';
-    ctx.fillText('Монеты: ' + player.coins, x, y + h + 20);
+    ctx.globalAlpha = 1;
   }
 
   return {
