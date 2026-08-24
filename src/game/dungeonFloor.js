@@ -219,6 +219,57 @@ export function spawnShop(floor) {
   }
 }
 
+// --- ловушки-шипы: телеграфируемые, пульсируют синхронно по всему этажу ---
+// Синхронность — ради читаемости: игрок видит одну общую фазу, а не десяток
+// вразнобой. Ранят только игрока (враги их игнорируют — иначе бой разваливается).
+export const TRAP_SIZE = WALL;
+export const TRAP_PERIOD = 2.0;   // полный цикл, сек
+const TRAP_OUT = 0.5;             // шипы снаружи (в конце цикла)
+const TRAP_WARN = 0.35;           // подсветка-предупреждение перед выходом
+
+export function spawnTraps(floor) {
+  for (const room of floor.rooms) {
+    if (room.kind !== 'combat') continue;
+    if (Math.random() > 0.45) continue; // не в каждой боевой — иначе давит
+    room.traps = [];
+    for (let i = 0; i < 3; i++) room.traps.push({ x: room.cx + (i - 1) * WALL, y: room.cy + 2 * WALL });
+  }
+}
+
+const trapCycle = (time) => ((time % TRAP_PERIOD) + TRAP_PERIOD) % TRAP_PERIOD;
+export function trapsOut(time) { return trapCycle(time) > TRAP_PERIOD - TRAP_OUT; }
+function trapsWarn(time) { const c = trapCycle(time); return c > TRAP_PERIOD - TRAP_OUT - TRAP_WARN && c <= TRAP_PERIOD - TRAP_OUT; }
+
+export function drawTraps(ctx, room, time) {
+  if (!room.traps) return;
+  const out = trapsOut(time), warn = trapsWarn(time), s = TRAP_SIZE;
+  for (const tr of room.traps) {
+    const x = tr.x - s / 2, y = tr.y - s / 2;
+    ctx.fillStyle = '#241a22'; // плита в полу
+    ctx.fillRect(x, y, s, s);
+    if (out) {
+      ctx.fillStyle = '#e05a67'; // шипы наружу
+      const w = (s - 6) / 3;
+      for (let k = 0; k < 3; k++) {
+        const bx = x + 3 + k * w;
+        ctx.beginPath();
+        ctx.moveTo(bx, y + s - 3);
+        ctx.lineTo(bx + w / 2, y + 4);
+        ctx.lineTo(bx + w, y + s - 3);
+        ctx.closePath();
+        ctx.fill();
+      }
+    } else if (warn) {
+      ctx.strokeStyle = '#e05a67'; // вот-вот выедут
+      ctx.lineWidth = 2;
+      ctx.strokeRect(x + 2, y + 2, s - 4, s - 4);
+    } else {
+      ctx.fillStyle = '#4a3540'; // отверстия, шипы спрятаны
+      for (let k = 0; k < 3; k++) ctx.fillRect(x + 5 + k * ((s - 10) / 2.2), y + s / 2 - 2, 3, 3);
+    }
+  }
+}
+
 function shuffle(arr) {
   for (let i = arr.length - 1; i > 0; i--) {
     const j = (Math.random() * (i + 1)) | 0;

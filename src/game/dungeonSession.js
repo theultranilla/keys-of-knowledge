@@ -3,7 +3,7 @@ import { drawCharacter } from '../engine/character.js';
 import { DEFAULT_SKIN } from './skins.js';
 import {
   generateFloor, roomInterior, roomContains, allWalls, drawRooms, spawnChests, spawnShop, bossReward,
-  ROOM_H, WALL
+  spawnTraps, drawTraps, trapsOut, TRAP_SIZE, ROOM_H, WALL
 } from './dungeonFloor.js';
 import { createDungeonTouch } from './dungeonTouch.js';
 import { createCombat } from './dungeonCombat.js';
@@ -33,6 +33,7 @@ export function createDungeonSession({ input, audio, save, canvas, modal, tasks,
   let firing = false, fireCd = 0, muzzle = 0;
   let shake = 0, walkPhase = 0, moving = false;
   let bannerTime = 0; // таймер баннера «Этаж N»
+  let time = 0; // часы забега — по ним пульсируют ловушки
   const sparks = [];
 
   const combat = createCombat({
@@ -49,6 +50,7 @@ export function createDungeonSession({ input, audio, save, canvas, modal, tasks,
     floor = generateFloor(n);
     spawnChests(floor); // сундуки-выбор в сокровищницах
     spawnShop(floor);   // прилавки в лавках
+    spawnTraps(floor);  // шипы в части боевых комнат
     current = floor.start;
     current.visited = true;
     player.x = current.cx - player.width / 2;
@@ -88,6 +90,7 @@ export function createDungeonSession({ input, audio, save, canvas, modal, tasks,
     if (player.hurtCd > 0) player.hurtCd -= dt;
     if (shake > 0) shake = Math.max(0, shake - 40 * dt);
     if (bannerTime > 0) bannerTime -= dt;
+    time += dt; // ход часов замирает вместе с миром (после guard) — ловушки честно стоят на паузе
 
     move(dt);
     clampToRooms();  // страховка: никогда не оказаться за пределами всех комнат
@@ -96,6 +99,7 @@ export function createDungeonSession({ input, audio, save, canvas, modal, tasks,
     tryChest();
     tryShop();
     collectPickups();
+    if (damageTraps()) return; // урон о шипы мог обнулить забег → дальше не трогаем мёртвую сессию
     aimAndFire();
     combat.update(dt, floor, current, center(), player.dmgMul, player.width / 2);
     updateSparks(dt);
@@ -278,6 +282,20 @@ export function createDungeonSession({ input, audio, save, canvas, modal, tasks,
     }
   }
 
+  // Урон о выехавшие шипы. hitPlayer сам держит кулдаун — стоя на шипах, не
+  // теряешь всё HP за кадр. Возвращает true, если удар оказался смертельным.
+  function damageTraps() {
+    if (!current.traps || !trapsOut(time)) return false;
+    const h = TRAP_SIZE / 2;
+    for (const tr of current.traps) {
+      if (player.x < tr.x + h && player.x + player.width > tr.x - h &&
+          player.y < tr.y + h && player.y + player.height > tr.y - h) {
+        return hitPlayer(1);
+      }
+    }
+    return false;
+  }
+
   function tryShop() {
     if (!current.stands) return;
     const c = center();
@@ -301,6 +319,7 @@ export function createDungeonSession({ input, audio, save, canvas, modal, tasks,
     ctx.translate(-camX, -camY);
 
     drawRooms(ctx, floor);
+    drawTraps(ctx, current, time); // шипы под сущностями — по ним ходят
     combat.draw(ctx, current);
     drawSparks(ctx);
 
