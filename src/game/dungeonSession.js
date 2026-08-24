@@ -7,7 +7,7 @@ import {
 } from './dungeonFloor.js';
 import { createDungeonTouch } from './dungeonTouch.js';
 import { createCombat } from './dungeonCombat.js';
-import { drawMinimap, drawHp, drawEnemiesLeft, drawFloorBanner } from './dungeonHud.js';
+import { drawMinimap, drawHp, drawEnemiesLeft, drawFloorBanner, drawBossBar } from './dungeonHud.js';
 import { prefersReducedMotion } from '../engine/motion.js';
 
 // Режим «Данж» (рогалик в духе Soul Knight). Этаж — карта комнат с дверями, камера держит
@@ -319,8 +319,10 @@ export function createDungeonSession({ input, audio, save, canvas, modal, tasks,
     ctx.restore();
     drawMinimap(ctx, floor, current);
     drawHp(ctx, player, floor.floorNumber);
-    const foes = current.spawned && !current.cleared ? current.enemies.length : 0;
-    drawEnemiesLeft(ctx, foes);
+    const activeCombat = current.spawned && !current.cleared;
+    const boss = activeCombat ? current.enemies.find((e) => e.kind === 'boss') : null;
+    if (boss) drawBossBar(ctx, boss); // в комнате босса — его полоска вместо счётчика
+    else drawEnemiesLeft(ctx, activeCombat ? current.enemies.length : 0);
     drawFloorBanner(ctx, floor.floorNumber, bannerTime / 0.5); // альфа>1 держит баннер, <1 гасит
     touch.draw(ctx); // джойстики поверх (только когда есть касания)
   }

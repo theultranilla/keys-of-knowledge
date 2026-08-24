@@ -89,7 +89,8 @@ const ru = {
 
   'dungeon.floor': 'Этаж {n}',
   'dungeon.coins': 'Монеты: {n}',
-  'dungeon.enemiesLeft': 'Врагов: {n}'
+  'dungeon.enemiesLeft': 'Врагов: {n}',
+  'dungeon.boss': 'БОСС'
 };
 
 const dictionaries = { ru };

@@ -8,7 +8,7 @@ import { PALETTE } from '../engine/constants.js';
 
 export const SHOT_SPEED = 560, SHOT_LIFE = 1.1, SHOT_R = 5, SHOT_DMG = 1;
 const ENEMY_SPEED = 95, ENEMY_HP = 3, ENEMY_R = 15, HIT_FLASH = 0.08, CONTACT_DMG = 1;
-const BOSS_R = 30, BOSS_SPEED = 60;
+const BOSS_R = 30, BOSS_SPEED = 60, BOSS_BURST_CD = 2.2, BOSS_BURST_N = 10;
 const SHOOTER_RANGE = 250, SHOOTER_FIRE_CD = 1.3, SHOOTER_SPEED = 70;
 const TANK_R = 26, TANK_HP = 9, TANK_SPEED = 45;
 const ESHOT_SPEED = 280, ESHOT_R = 6, ESHOT_LIFE = 2.4, ESHOT_DMG = 1;
@@ -73,6 +73,21 @@ export function createCombat({ audio, hitPlayer, onClear, onEnemyHit }) {
         e.fireCd -= dt;
         if (e.fireCd <= 0) { eShots.push({ x: e.x, y: e.y, vx: nx * ESHOT_SPEED, vy: ny * ESHOT_SPEED, life: ESHOT_LIFE }); e.fireCd = SHOOTER_FIRE_CD; }
       } else { e.x += nx * e.speed * dt; e.y += ny * e.speed * dt; }
+      // Босс вдобавок к преследованию бьёт радиальным залпом — иначе он просто
+      // «большой преследователь». Каждый залп чуть провёрнут, чтобы не давать
+      // игроку статичные коридоры между пулями.
+      if (e.kind === 'boss') {
+        e.burstCd -= dt;
+        if (e.burstCd <= 0) {
+          for (let k = 0; k < BOSS_BURST_N; k++) {
+            const a = (k / BOSS_BURST_N) * Math.PI * 2 + e.burstAngle;
+            eShots.push({ x: e.x, y: e.y, vx: Math.cos(a) * ESHOT_SPEED, vy: Math.sin(a) * ESHOT_SPEED, life: ESHOT_LIFE });
+          }
+          e.burstAngle += 0.4;
+          e.burstCd = BOSS_BURST_CD;
+          audio?.play?.('shoot');
+        }
+      }
       e.x = Math.max(it.x0 + e.r, Math.min(it.x1 - e.r, e.x));
       e.y = Math.max(it.y0 + e.r, Math.min(it.y1 - e.r, e.y));
       if (d < e.r + half && hitPlayer(CONTACT_DMG)) return;
@@ -106,7 +121,7 @@ function makeEnemy(x, y, kind, floorNumber) {
   if (kind === 'boss') { r = BOSS_R; hp = ENEMY_HP * 6 + floorNumber * 4; speed = BOSS_SPEED; }
   else if (kind === 'shooter') { r = 14; hp = 2; speed = SHOOTER_SPEED; }
   else if (kind === 'tank') { r = TANK_R; hp = TANK_HP; speed = TANK_SPEED; }
-  return { x, y, r, hp, maxHp: hp, speed, kind, hitFlash: 0, fireCd: rand(0.5, SHOOTER_FIRE_CD) };
+  return { x, y, r, hp, maxHp: hp, speed, kind, hitFlash: 0, fireCd: rand(0.5, SHOOTER_FIRE_CD), burstCd: BOSS_BURST_CD, burstAngle: 0 };
 }
 
 function rand(lo, hi) { return lo + Math.random() * (hi - lo); }

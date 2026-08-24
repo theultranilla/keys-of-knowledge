@@ -55,6 +55,25 @@ export function drawEnemiesLeft(ctx, count) {
   ctx.textAlign = 'left';
 }
 
+// Полоска здоровья босса — по центру сверху, пока босс жив. Даёт бою ощущение
+// прогресса, которого «просто большой враг» не давал.
+export function drawBossBar(ctx, boss) {
+  const w = 360, h = 16, x = (VIEW_WIDTH - w) / 2, y = 40;
+  ctx.fillStyle = 'rgba(0,0,0,0.55)';
+  ctx.fillRect(x - 3, y - 3, w + 6, h + 6);
+  ctx.fillStyle = '#5a1e26'; // тёмная подложка = потерянное здоровье
+  ctx.fillRect(x, y, w, h);
+  ctx.fillStyle = '#e05a67';
+  ctx.fillRect(x, y, w * Math.max(0, boss.hp / boss.maxHp), h);
+  ctx.fillStyle = '#f6d24d';
+  ctx.font = 'bold 12px sans-serif';
+  ctx.textAlign = 'center';
+  ctx.textBaseline = 'middle';
+  ctx.fillText(t('dungeon.boss'), VIEW_WIDTH / 2, y + h / 2);
+  ctx.textAlign = 'left';
+  ctx.textBaseline = 'alphabetic';
+}
+
 // Баннер «Этаж N» при входе: крупно по центру, гаснет к концу таймера.
 export function drawFloorBanner(ctx, floorNumber, alpha) {
   if (alpha <= 0) return;
