@@ -72,7 +72,9 @@ export function createDungeonSession({ input, audio, save, canvas }) {
     if (player.hurtCd > 0) player.hurtCd -= dt;
 
     move(dt);
+    clampToRooms();  // страховка: никогда не оказаться за пределами всех комнат
     trackRoom();
+    maybeActivate(); // двери запираем, только когда игрок уже внутри (не в проёме)
     aimAndFire();
     updateShots(dt);
     if (current.spawned && !current.cleared) updateCombat(dt);
@@ -119,10 +121,26 @@ export function createDungeonSession({ input, audio, save, canvas }) {
       if (room !== current && roomContains(room, c.x, c.y)) {
         current = room;
         room.visited = true;
-        if ((room.kind === 'combat' || room.kind === 'boss') && !room.spawned && !room.cleared) activate(room);
         return;
       }
     }
+  }
+
+  // Запираем боевую/босс-комнату, только когда игрок ушёл вглубь от проёма — иначе
+  // закрывающаяся дверь вытолкнула бы его наружу.
+  function maybeActivate() {
+    if (current.spawned || current.cleared) return;
+    if (current.kind !== 'combat' && current.kind !== 'boss') return;
+    const it = roomInterior(current), c = center();
+    if (c.x > it.x0 + 24 && c.x < it.x1 - 24 && c.y > it.y0 + 24 && c.y < it.y1 - 24) activate(current);
+  }
+
+  function clampToRooms() {
+    const c = center();
+    for (const room of floor.rooms) if (roomContains(room, c.x, c.y)) return;
+    const it = roomInterior(current); // выпал из всех комнат — вернуть в текущую
+    player.x = Math.max(it.x0, Math.min(it.x1 - player.width, player.x));
+    player.y = Math.max(it.y0, Math.min(it.y1 - player.height, player.y));
   }
 
   function activate(room) {

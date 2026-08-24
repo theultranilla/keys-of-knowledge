@@ -30,8 +30,8 @@ body {
   flex-direction: column;
   align-items: center;
   justify-content: center;
-  gap: 12px;
-  padding: 12px;
+  gap: 6px;
+  padding: 6px;
 
   background: var(--sky-deep);
   color: var(--chalk);
@@ -51,7 +51,7 @@ body {
   /* Ширина подобрана так, чтобы 16:9 от неё гарантированно влезли по высоте
      вместе с подсказкой под игрой. Пропорции держит сам canvas (ниже), а не
      aspect-ratio: у него есть свои width/height, и два механизма спорили бы. */
-  width: min(100%, (100dvh - 90px) * 16 / 9);
+  width: min(100%, (100dvh - 44px) * 16 / 9);
 }
 
 #game {
