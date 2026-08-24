@@ -1,4 +1,4 @@
-import { t } from './i18n.js';
+import { t, randomPraise } from './i18n.js';
 import { createFigure } from './figures.js';
 import { MAX_ATTEMPTS } from '../tasks/engine.js';
 import { prefersReducedMotion } from '../engine/motion.js';
@@ -96,7 +96,8 @@ export function createTaskModal({ audio } = {}) {
 
     switch (result.status) {
       case 'correct':
-        say(t('task.correct'), 'ok');
+        // Случайная похвала вместо одной заученной фразы — детям для мотивации.
+        say(randomPraise(), 'ok');
         audio?.play('correct');
         finish({ solved: true, usedSolution: false }, CORRECT_CLOSE_DELAY);
         break;
