@@ -9,7 +9,7 @@ import { PALETTE } from '../engine/constants.js';
 // не в i18n. Обёртка интерфейса (кнопки, заголовки категорий) — в i18n.
 
 // Категории и порядок их показа в гардеробе.
-export const CATEGORIES = ['body', 'shirt', 'pants', 'hat', 'beard'];
+export const CATEGORIES = ['body', 'shirt', 'pants', 'outfit', 'hat', 'beard'];
 
 // price: 0 — базовый предмет, доступен всегда и надет по умолчанию.
 export const COSMETICS = [
@@ -34,11 +34,21 @@ export const COSMETICS = [
   { id: 'pants.forest', category: 'pants', name: 'Зелёные', price: 10, color: '#3E7D5A' },
   { id: 'pants.brick', category: 'pants', name: 'Красные', price: 15, color: '#B34A48' },
 
+  // Наряд — крупная одежда во весь силуэт (мантия/плащ/платье), из неё собираются
+  // образы. none — виден базовый герой с рубашкой/штанами.
+  { id: 'outfit.none', category: 'outfit', name: 'Без наряда', price: 0, style: null },
+  { id: 'outfit.robe', category: 'outfit', name: 'Мантия мага', price: 50, style: 'robe', color: '#6A4BBD' },
+  { id: 'outfit.cloak', category: 'outfit', name: 'Плащ ассасина', price: 50, style: 'cloak', color: '#2B2F3A' },
+  { id: 'outfit.dress', category: 'outfit', name: 'Платье принцессы', price: 60, style: 'dress', color: '#EF8FC0' },
+  { id: 'outfit.knight', category: 'outfit', name: 'Латы рыцаря', price: 70, style: 'knight', color: '#9AA6B8' },
+
   // Шапка
   { id: 'hat.none', category: 'hat', name: 'Без шапки', price: 0, style: null },
   { id: 'hat.cap', category: 'hat', name: 'Кепка', price: 20, style: 'cap', color: PALETTE.coral },
   { id: 'hat.beanie', category: 'hat', name: 'Шапочка', price: 20, style: 'beanie', color: PALETTE.teal },
+  { id: 'hat.hood', category: 'hat', name: 'Капюшон', price: 40, style: 'hood', color: '#2B2F3A' },
   { id: 'hat.wizard', category: 'hat', name: 'Колпак мага', price: 55, style: 'wizard', color: '#9B7BD8' },
+  { id: 'hat.tiara', category: 'hat', name: 'Тиара', price: 70, style: 'tiara', color: PALETTE.amber },
   { id: 'hat.crown', category: 'hat', name: 'Корона', price: 90, style: 'crown', color: PALETTE.amber },
 
   // Борода
@@ -55,6 +65,7 @@ export const DEFAULT_SKIN = {
   body: 'body.chalk',
   shirt: 'shirt.none',
   pants: 'pants.none',
+  outfit: 'outfit.none',
   hat: 'hat.none',
   beard: 'beard.none'
 };

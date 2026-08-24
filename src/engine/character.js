@@ -13,6 +13,7 @@ export function drawCharacter(ctx, x, y, w, h, skin = DEFAULT_SKIN, facing = 1) 
   const body = pick('body');
   const shirt = pick('shirt');
   const pants = pick('pants');
+  const outfit = pick('outfit');
   const hat = pick('hat');
   const beard = pick('beard');
 
@@ -42,6 +43,9 @@ export function drawCharacter(ctx, x, y, w, h, skin = DEFAULT_SKIN, facing = 1) 
     ctx.restore();
   }
 
+  // Наряд поверх рубашки/штанов — из него собирается образ (маг/ассасин/принцесса).
+  if (outfit?.style) drawOutfit(ctx, x, y, w, h, outfit);
+
   // Янтарный фонарик смотрит туда же, куда бежит игрок.
   ctx.fillStyle = PALETTE.amber;
   const lampX = facing > 0 ? x + w - 8 * sx : x + 2 * sx;
@@ -56,6 +60,68 @@ export function drawCharacter(ctx, x, y, w, h, skin = DEFAULT_SKIN, facing = 1) 
 
   if (beard?.style) drawBeard(ctx, x, y, w, h, beard);
   if (hat?.style) drawHat(ctx, x, y, w, h, hat, facing);
+}
+
+// Крупная одежда во весь силуэт. Торс/ноги закрашиваются в силуэте тела (clip),
+// а юбка платья и наплечники рыцаря могут выходить за него — как шапки рисуются
+// выше макушки.
+function drawOutfit(ctx, x, y, w, h, outfit) {
+  const cx = x + w / 2;
+  const unit = Math.min(w / 22, h / 30);
+  const clipBody = () => { roundedRect(ctx, x, y, w, h, 6 * unit); ctx.clip(); };
+
+  switch (outfit.style) {
+    case 'robe': {
+      ctx.save(); clipBody();
+      ctx.fillStyle = outfit.color;
+      ctx.fillRect(x, y + h * 0.38, w, h * 0.62);
+      ctx.fillStyle = 'rgba(255,255,255,0.30)'; // светлый кант по центру
+      ctx.fillRect(cx - w * 0.05, y + h * 0.4, w * 0.1, h * 0.6);
+      ctx.restore();
+      break;
+    }
+    case 'cloak': {
+      ctx.save(); clipBody();
+      ctx.fillStyle = outfit.color;
+      ctx.fillRect(x, y + h * 0.33, w, h * 0.67);
+      ctx.fillStyle = 'rgba(0,0,0,0.45)'; // пояс
+      ctx.fillRect(x, y + h * 0.6, w, h * 0.05);
+      ctx.restore();
+      break;
+    }
+    case 'knight': {
+      ctx.save(); clipBody();
+      ctx.fillStyle = outfit.color;
+      ctx.fillRect(x, y + h * 0.34, w, h * 0.66);
+      ctx.fillStyle = 'rgba(255,255,255,0.28)'; // блик на нагруднике
+      ctx.fillRect(x + w * 0.2, y + h * 0.4, w * 0.25, h * 0.18);
+      ctx.fillStyle = 'rgba(0,0,0,0.28)'; // линия пояса
+      ctx.fillRect(x, y + h * 0.62, w, h * 0.04);
+      ctx.restore();
+      ctx.fillStyle = outfit.color; // наплечники поверх силуэта
+      ctx.beginPath(); ctx.arc(x + w * 0.16, y + h * 0.37, w * 0.16, Math.PI, 0); ctx.fill();
+      ctx.beginPath(); ctx.arc(x + w * 0.84, y + h * 0.37, w * 0.16, Math.PI, 0); ctx.fill();
+      break;
+    }
+    case 'dress': {
+      ctx.save(); clipBody(); // корсаж в силуэте
+      ctx.fillStyle = outfit.color;
+      ctx.fillRect(x, y + h * 0.42, w, h * 0.2);
+      ctx.restore();
+      ctx.fillStyle = outfit.color; // юбка-колокол — расширяется за силуэт
+      ctx.beginPath();
+      ctx.moveTo(cx - w * 0.26, y + h * 0.6);
+      ctx.lineTo(cx + w * 0.26, y + h * 0.6);
+      ctx.lineTo(cx + w * 0.6, y + h);
+      ctx.lineTo(cx - w * 0.6, y + h);
+      ctx.closePath(); ctx.fill();
+      ctx.fillStyle = 'rgba(255,255,255,0.5)'; // поясок
+      ctx.fillRect(cx - w * 0.26, y + h * 0.58, w * 0.52, h * 0.03);
+      break;
+    }
+    default:
+      break;
+  }
 }
 
 function drawBeard(ctx, x, y, w, h, beard) {
@@ -110,6 +176,32 @@ function drawHat(ctx, x, y, w, h, hat, facing) {
       ctx.lineTo(centerX, y - h * 0.55);
       ctx.closePath();
       ctx.fill();
+      break;
+    }
+    case 'hood': {
+      // Купол капюшона над головой и боковые отвороты вдоль щёк — лицо открыто.
+      ctx.beginPath();
+      ctx.moveTo(x - w * 0.04, y + h * 0.28);
+      ctx.quadraticCurveTo(centerX, y - h * 0.24, x + w * 1.04, y + h * 0.28);
+      ctx.closePath();
+      ctx.fill();
+      ctx.fillRect(x - w * 0.04, y + h * 0.1, w * 0.16, h * 0.28);
+      ctx.fillRect(x + w * 0.88, y + h * 0.1, w * 0.16, h * 0.28);
+      break;
+    }
+    case 'tiara': {
+      const b = y + h * 0.05;
+      ctx.beginPath();
+      ctx.moveTo(x + w * 0.26, b);
+      ctx.lineTo(x + w * 0.37, b - h * 0.09);
+      ctx.lineTo(x + w * 0.46, b);
+      ctx.lineTo(centerX, b - h * 0.13);
+      ctx.lineTo(x + w * 0.54, b);
+      ctx.lineTo(x + w * 0.63, b - h * 0.09);
+      ctx.lineTo(x + w * 0.74, b);
+      ctx.closePath();
+      ctx.fill();
+      ctx.fillRect(x + w * 0.26, b, w * 0.48, Math.max(1.5, unit * 1.5)); // ободок
       break;
     }
     case 'crown': {

@@ -47,6 +47,7 @@ const ru = {
   'wardrobe.cat.body': 'Цвет кожи',
   'wardrobe.cat.shirt': 'Футболка',
   'wardrobe.cat.pants': 'Штаны',
+  'wardrobe.cat.outfit': 'Наряд',
   'wardrobe.cat.hat': 'Шапка',
   'wardrobe.cat.beard': 'Борода',
 
