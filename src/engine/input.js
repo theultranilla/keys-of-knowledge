@@ -4,19 +4,26 @@
 
 // event.code, а не event.key: код привязан к позиции клавиши, поэтому WASD
 // работает и на русской раскладке, где key вернёт «ц» вместо «w».
+// Одна клавиша может давать несколько действий: W — это и «jump» (платформер),
+// и «up» (данж). Режим сам читает нужные.
 const BINDINGS = {
-  ArrowLeft: 'left',
-  KeyA: 'left',
-  ArrowRight: 'right',
-  KeyD: 'right',
-  Space: 'jump',
-  ArrowUp: 'jump',
-  KeyW: 'jump',
-  KeyE: 'interact',
+  ArrowLeft: ['left'],
+  KeyA: ['left'],
+  ArrowRight: ['right'],
+  KeyD: ['right'],
+  ArrowUp: ['up', 'jump'],
+  KeyW: ['up', 'jump'],
+  ArrowDown: ['down'],
+  KeyS: ['down'],
+  Space: ['jump'],
+  KeyE: ['interact'],
+  KeyF: ['nova'],       // способность (данж)
+  Tab: ['swap'],        // сменить оружие (данж)
+  ShiftLeft: ['dash'],  // рывок (данж)
   // Аварийный выход: игрок сам возвращает себя на чекпоинт. Нужен на случай,
   // когда геометрия уровня загнала его в угол, откуда не выпрыгнуть.
-  KeyR: 'respawn',
-  Escape: 'pause'
+  KeyR: ['respawn'],
+  Escape: ['pause']
 };
 
 // Пока фокус в поле ввода или внутри карточки с задачей, клавиши принадлежат ей,
@@ -32,21 +39,20 @@ export function createInput(target = window) {
 
   function onKeyDown(event) {
     if (isTyping(event.target)) return;
-    const action = BINDINGS[event.code];
-    if (!action) return;
-    // Иначе Space и стрелки прокрутят страницу под игрой.
+    const actions = BINDINGS[event.code];
+    if (!actions) return;
+    // Иначе Space, стрелки и Tab прокрутят/переведут фокус на странице под игрой.
     event.preventDefault();
     if (event.repeat) return;
-    held.add(action);
-    pressed.add(action);
+    for (const action of actions) { held.add(action); pressed.add(action); }
   }
 
   function onKeyUp(event) {
     if (isTyping(event.target)) return;
-    const action = BINDINGS[event.code];
-    if (!action) return;
+    const actions = BINDINGS[event.code];
+    if (!actions) return;
     event.preventDefault();
-    held.delete(action);
+    for (const action of actions) held.delete(action);
   }
 
   function releaseAll() {

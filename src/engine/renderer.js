@@ -103,7 +103,9 @@ export function createRenderer(canvas) {
     drawCharacter(ctx, x, y, player.width, player.height, skin ?? DEFAULT_SKIN, player.facing);
   }
 
-  return { resize, draw };
+  // ctx отдаём наружу: режим «Данж» рисует свою сцену сам, в тех же логических
+  // координатах 960×540 (трансформ уже выставлен в resize).
+  return { resize, draw, ctx };
 }
 
 function lerp(from, to, t) {

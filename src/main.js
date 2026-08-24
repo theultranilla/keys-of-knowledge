@@ -6,6 +6,7 @@ import { createAudio } from './engine/audio.js';
 import { createPop } from './game/pop.js';
 import { loadLevel, loadLevelIndex, parseLevel } from './game/level.js';
 import { createSession } from './game/session.js';
+import { createDungeonSession } from './game/dungeonSession.js';
 import { createState, SCENE } from './game/state.js';
 import { createHud } from './ui/hud.js';
 import { createTaskModal } from './ui/taskModal.js';
@@ -50,6 +51,7 @@ const menu = createMenu({
   levels,
   on: {
     play: () => startLevel(nextPlayableId()),
+    dungeon: () => startDungeon(),
     levels: () => state.go(SCENE.LEVELS),
     wardrobe: () => state.go(SCENE.WARDROBE),
     settings: () => state.go(SCENE.SETTINGS),
@@ -98,6 +100,7 @@ function startLevel(id) {
   const level = levelsById.get(id);
   if (!level) return;
 
+  session?.destroy?.(); // прошлый режим мог навесить слушатели (данж) — снимаем
   currentLevelId = id;
   // Сид уровня лежит в сохранении: пока уровень не пройден, задачи в нём те же.
   tasks = createTaskEngine({ runSeed: save.seedFor(id) });
@@ -113,6 +116,14 @@ function startLevel(id) {
     onComplete: (result) => finishLevel(id, result)
   });
 
+  state.go(SCENE.PLAYING);
+}
+
+// Запуск режима «Данж» (рогалик). Общий слой берём тот же, что у платформера.
+function startDungeon() {
+  session?.destroy?.();
+  currentLevelId = null;
+  session = createDungeonSession({ input, audio, save, canvas });
   state.go(SCENE.PLAYING);
 }
 
@@ -174,8 +185,13 @@ function update(dt) {
 const loop = createLoop({
   update,
   // Мир рисуется всегда, даже под меню: экраны полупрозрачные, и за ними видно,
-  // что игра — вот она, а не где-то потом.
-  render: (alpha) => session && renderer.draw(session.scene, alpha)
+  // что игра — вот она, а не где-то потом. Данж рисует свою сцену сам (session.render),
+  // платформер — через профильный renderer.draw.
+  render: (alpha) => {
+    if (!session) return;
+    if (session.render) session.render(renderer.ctx, alpha);
+    else renderer.draw(session.scene, alpha);
+  }
 });
 
 // ResizeObserver, а не window.resize: он ловит любую смену размеров canvas —

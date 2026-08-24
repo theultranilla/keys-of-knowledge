@@ -37,6 +37,7 @@ export function createMenu({ mount, save, levels, on }) {
         'div',
         { class: 'screen__actions' },
         button('screen__button screen__button--primary', t('menu.play'), on.play),
+        button('screen__button', t('menu.dungeon'), () => on.dungeon()),
         button('screen__button', t('menu.levels'), () => on.levels()),
         button('screen__button', t('menu.wardrobe'), () => on.wardrobe()),
         button('screen__button', t('menu.settings'), () => on.settings())

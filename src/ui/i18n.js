@@ -30,6 +30,7 @@ const ru = {
   'menu.title': 'Ключи знаний',
   'menu.subtitle': 'Беги, прыгай, решай — и открывай двери',
   'menu.play': 'Играть',
+  'menu.dungeon': 'Данж (рогалик)',
   'menu.levels': 'Выбрать уровень',
   'menu.wardrobe': 'Гардероб',
   'menu.settings': 'Настройки',
