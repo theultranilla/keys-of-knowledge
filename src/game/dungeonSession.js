@@ -40,7 +40,7 @@ export function createDungeonSession({ input, audio, save, canvas, modal, tasks,
     audio,
     hitPlayer,
     onClear: onRoomClear,
-    onEnemyHit: spawnSparks
+    onEnemyHit: enemyDown
   });
 
   let floor, current;
@@ -207,7 +207,17 @@ export function createDungeonSession({ input, audio, save, canvas, modal, tasks,
       room.chests = bossReward(room);
       addShake(12);
     } else {
-      room.pickups = dropCoins(room);
+      // concat, а не присваивание: монеты, выпавшие с элиток по ходу боя, не теряем
+      room.pickups = (room.pickups || []).concat(dropCoins(room));
+    }
+  }
+
+  // Смерть/попадание по врагу: искры + монета за убитую элиту (риск/награда).
+  function enemyDown(x, y, death, elite) {
+    spawnSparks(x, y, death);
+    if (death && elite) {
+      current.pickups = current.pickups || [];
+      current.pickups.push({ x, y, kind: 'coin', value: 4 });
     }
   }
 

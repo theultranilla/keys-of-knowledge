@@ -18,6 +18,9 @@ const ENEMY_COLOR = { chaser: PALETTE.coral, shooter: '#f0a04b', tank: '#8a3a52'
 const ENEMY_CAP = 12;                       // потолок числа врагов в комнате
 const RAMP_HP = 0.12;                       // +12% HP за каждый этаж после первого
 const RAMP_SPEED = 0.04, SPEED_CAP = 1.4;   // прирост скорости и его потолок
+// Элитные враги: редкие крупные с этажа 3, крепче и медленнее, роняют монету.
+const ELITE_FLOOR = 3, ELITE_CHANCE = 0.12;
+const ELITE_HP_MUL = 2.2, ELITE_R_MUL = 1.5, ELITE_SLOW = 0.85;
 
 export function createCombat({ audio, hitPlayer, onClear, onEnemyHit }) {
   const shots = [], eShots = [];
@@ -29,7 +32,8 @@ export function createCombat({ audio, hitPlayer, onClear, onEnemyHit }) {
     const it = roomInterior(room);
     const n = Math.min(ENEMY_CAP, 4 + floorNumber); // с потолком, иначе глубокие этажи — каша
     for (let i = 0; i < n; i++) {
-      room.enemies.push(makeEnemy(rand(it.x0 + 30, it.x1 - 30), rand(it.y0 + 30, it.y1 - 30), pickKind(floorNumber), floorNumber));
+      const elite = floorNumber >= ELITE_FLOOR && Math.random() < ELITE_CHANCE;
+      room.enemies.push(makeEnemy(rand(it.x0 + 30, it.x1 - 30), rand(it.y0 + 30, it.y1 - 30), pickKind(floorNumber), floorNumber, elite));
     }
   }
 
@@ -49,7 +53,7 @@ export function createCombat({ audio, hitPlayer, onClear, onEnemyHit }) {
       if (!dead) for (const e of current.enemies) {
         if (e.hp > 0 && Math.hypot(s.x - e.x, s.y - e.y) < e.r + SHOT_R) {
           e.hp -= SHOT_DMG * dmgMul; e.hitFlash = HIT_FLASH; dead = true;
-          audio?.play?.('enemyHit'); onEnemyHit?.(s.x, s.y, false); break;
+          audio?.play?.('enemyHit'); onEnemyHit?.(s.x, s.y, false, false); break;
         }
       }
       if (dead) shots.splice(i, 1);
@@ -70,7 +74,7 @@ export function createCombat({ audio, hitPlayer, onClear, onEnemyHit }) {
     for (let i = current.enemies.length - 1; i >= 0; i--) {
       const e = current.enemies[i];
       if (e.hitFlash > 0) e.hitFlash -= dt;
-      if (e.hp <= 0) { current.enemies.splice(i, 1); audio?.play?.('enemyDie'); onEnemyHit?.(e.x, e.y, true); continue; }
+      if (e.hp <= 0) { current.enemies.splice(i, 1); audio?.play?.('enemyDie'); onEnemyHit?.(e.x, e.y, true, e.elite); continue; }
       const dx = pc.x - e.x, dy = pc.y - e.y, d = Math.hypot(dx, dy) || 1, nx = dx / d, ny = dy / d;
       if (e.kind === 'shooter') {
         if (d > SHOOTER_RANGE + 30) { e.x += nx * e.speed * dt; e.y += ny * e.speed * dt; }
@@ -104,6 +108,10 @@ export function createCombat({ audio, hitPlayer, onClear, onEnemyHit }) {
     for (const e of current.enemies) {
       ctx.fillStyle = e.hitFlash > 0 ? '#ffffff' : (ENEMY_COLOR[e.kind] ?? PALETTE.coral);
       ctx.beginPath(); ctx.arc(e.x, e.y, e.r, 0, Math.PI * 2); ctx.fill();
+      if (e.elite) { // золотое кольцо — сразу видно, что враг опасный и с монетой
+        ctx.strokeStyle = '#f6d24d'; ctx.lineWidth = 3;
+        ctx.beginPath(); ctx.arc(e.x, e.y, e.r + 3, 0, Math.PI * 2); ctx.stroke();
+      }
     }
     ctx.fillStyle = '#ff8a4b';
     for (const s of eShots) { ctx.beginPath(); ctx.arc(s.x, s.y, ESHOT_R, 0, Math.PI * 2); ctx.fill(); }
@@ -124,11 +132,11 @@ function pickKind(floorNumber) {
   return 'chaser';
 }
 
-function makeEnemy(x, y, kind, floorNumber) {
+function makeEnemy(x, y, kind, floorNumber, elite = false) {
   // Босс живёт по своей формуле HP и не попадает под общий множитель этажа.
   if (kind === 'boss') {
     const hp = ENEMY_HP * 6 + floorNumber * 4;
-    return { x, y, r: BOSS_R, hp, maxHp: hp, speed: BOSS_SPEED, kind, hitFlash: 0, fireCd: 0, burstCd: BOSS_BURST_CD, burstAngle: 0 };
+    return { x, y, r: BOSS_R, hp, maxHp: hp, speed: BOSS_SPEED, kind, elite: false, hitFlash: 0, fireCd: 0, burstCd: BOSS_BURST_CD, burstAngle: 0 };
   }
   let r = ENEMY_R, hp = ENEMY_HP, speed = ENEMY_SPEED;
   if (kind === 'shooter') { r = 14; hp = 2; speed = SHOOTER_SPEED; }
@@ -138,7 +146,8 @@ function makeEnemy(x, y, kind, floorNumber) {
   const depth = floorNumber - 1;
   hp = Math.max(1, Math.round(hp * (1 + depth * RAMP_HP)));
   speed *= Math.min(SPEED_CAP, 1 + depth * RAMP_SPEED);
-  return { x, y, r, hp, maxHp: hp, speed, kind, hitFlash: 0, fireCd: rand(0.5, SHOOTER_FIRE_CD) };
+  if (elite) { r *= ELITE_R_MUL; hp = Math.round(hp * ELITE_HP_MUL); speed *= ELITE_SLOW; }
+  return { x, y, r, hp, maxHp: hp, speed, kind, elite, hitFlash: 0, fireCd: rand(0.5, SHOOTER_FIRE_CD) };
 }
 
 function rand(lo, hi) { return lo + Math.random() * (hi - lo); }
