@@ -85,6 +85,7 @@ const ru = {
   'defeat.subtitle': 'Знания кончились раньше врагов',
   'defeat.floor': 'Дошёл до этажа',
   'defeat.coins': 'Собрано монет',
+  'defeat.earned': 'В кошелёк за забег',
   'defeat.retry': 'Ещё раз',
   'defeat.toMenu': 'В меню',
 

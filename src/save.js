@@ -121,6 +121,15 @@ export function createSave() {
       return { stars, ratio };
     },
 
+    // Начислить монеты в постоянный кошелёк (данж: награда за пройденные этажи).
+    // Копится в coinsTotal, как и монеты с уровней, — тратится потом в гардеробе.
+    earnCoins(amount) {
+      const add = Math.max(0, Math.round(amount || 0));
+      if (add === 0) return;
+      data.player.coinsTotal += add;
+      persist();
+    },
+
     // Статистика по генераторам копится между забегами: сколько раз задача
     // попадалась, сколько раз решена с первой попытки и сколько — с разбором.
     mergeTaskStats(stats) {

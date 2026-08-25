@@ -18,6 +18,7 @@ import { prefersReducedMotion } from '../engine/motion.js';
 const MOVE_SPEED = 235, FIRE_COOLDOWN = 0.14, MUZZLE_TIME = 0.05;
 const PLAYER_HP = 6, CONTACT_CD = 0.8, CAM_SMOOTH = 8, PORTAL_R = 30;
 const BANNER_TIME = 1.6; // сколько держится баннер «Этаж N» при входе
+const COINS_PER_FLOOR = 4; // монет в кошелёк за спуск с этажа (× номер этажа — глубже щедрее)
 
 export function createDungeonSession({ input, audio, save, canvas, modal, tasks, onDeath }) {
   const player = {
@@ -35,6 +36,7 @@ export function createDungeonSession({ input, audio, save, canvas, modal, tasks,
   let bannerTime = 0; // таймер баннера «Этаж N»
   let time = 0; // часы забега — по ним пульсируют ловушки
   let trapsWereOut = false; // для звука выезда шипов — ловим фронт
+  let bankedThisRun = 0; // сколько монет забег уже отправил в кошелёк
   const sparks = [];
 
   const combat = createCombat({
@@ -115,7 +117,14 @@ export function createDungeonSession({ input, audio, save, canvas, modal, tasks,
 
     if (current.portal) {
       const c = center();
-      if (Math.hypot(c.x - current.portal.x, c.y - current.portal.y) < PORTAL_R) newFloor(floor.floorNumber + 1);
+      if (Math.hypot(c.x - current.portal.x, c.y - current.portal.y) < PORTAL_R) {
+        // Спуск = этаж пройден. Награда в кошелёк тем больше, чем глубже, и
+        // банкуется сразу — переживёт даже закрытие вкладки.
+        const reward = floor.floorNumber * COINS_PER_FLOOR;
+        bankedThisRun += reward;
+        save?.earnCoins?.(reward);
+        newFloor(floor.floorNumber + 1);
+      }
     }
   }
 
@@ -200,7 +209,7 @@ export function createDungeonSession({ input, audio, save, canvas, modal, tasks,
     if (player.hp <= 0) {
       dead = true;
       audio?.play?.('wrong'); // мягкий низкий сигнал: забег окончен
-      onDeath?.({ floor: floor.floorNumber, coins: player.coins });
+      onDeath?.({ floor: floor.floorNumber, coins: player.coins, banked: bankedThisRun });
       return true; // бой прекращает обработку этого кадра
     }
     return false;

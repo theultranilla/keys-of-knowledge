@@ -68,7 +68,9 @@ export function createOverlays({ mount, on }) {
         el('dt', { text: t('defeat.floor') }),
         el('dd', { text: String(summary.floor) }),
         el('dt', { text: t('defeat.coins') }),
-        el('dd', { text: String(summary.coins) })),
+        el('dd', { text: String(summary.coins) }),
+        el('dt', { text: t('defeat.earned') }),
+        el('dd', { text: '+' + String(summary.banked ?? 0) })),
       el('div', { class: 'screen__actions' },
         button('screen__button screen__button--primary', t('defeat.retry'), on.restartDungeon),
         button('screen__button', t('defeat.toMenu'), on.toMenu))
