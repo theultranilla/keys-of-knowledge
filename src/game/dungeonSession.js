@@ -19,12 +19,13 @@ const MOVE_SPEED = 235, FIRE_COOLDOWN = 0.14, MUZZLE_TIME = 0.05;
 const PLAYER_HP = 6, CONTACT_CD = 0.8, CAM_SMOOTH = 8, PORTAL_R = 30;
 const BANNER_TIME = 1.6; // сколько держится баннер «Этаж N» при входе
 const COINS_PER_FLOOR = 4; // монет в кошелёк за спуск с этажа (× номер этажа — глубже щедрее)
+const NOVA_FX_TIME = 0.4, NOVA_RADIUS = 260; // ударная волна «Новы»: длительность и радиус
 
 export function createDungeonSession({ input, audio, save, canvas, modal, tasks, onDeath }) {
   const player = {
     x: 0, y: 0, width: PLAYER_WIDTH, height: PLAYER_HEIGHT,
     prevX: 0, prevY: 0, aim: { x: 1, y: 0 }, facing: 1,
-    hp: PLAYER_HP, maxHp: PLAYER_HP, hurtCd: 0, dmgMul: 1, coins: 0
+    hp: PLAYER_HP, maxHp: PLAYER_HP, hurtCd: 0, dmgMul: 1, coins: 0, bombs: 1
   };
   let busy = false; // пока открыта карточка задачи — мир стоит
   let dead = false; // игрок погиб — забег заморожен до перезапуска
@@ -37,6 +38,8 @@ export function createDungeonSession({ input, audio, save, canvas, modal, tasks,
   let time = 0; // часы забега — по ним пульсируют ловушки
   let trapsWereOut = false; // для звука выезда шипов — ловим фронт
   let bankedThisRun = 0; // сколько монет забег уже отправил в кошелёк
+  let novaFx = 0; // таймер ударной волны «Новы»
+  const novaCenter = { x: 0, y: 0 };
   const sparks = [];
 
   const combat = createCombat({
@@ -69,7 +72,7 @@ export function createDungeonSession({ input, audio, save, canvas, modal, tasks,
   const addShake = (v) => { if (!prefersReducedMotion()) shake = Math.max(shake, v); };
 
   // Тач-джойстики (телефон). Мышь их не касается — обрабатываем ниже отдельно.
-  const touch = createDungeonTouch({ canvas });
+  const touch = createDungeonTouch({ canvas, input });
 
   const onMove = (e) => {
     if (e.pointerType === 'touch') return;
@@ -108,6 +111,15 @@ export function createDungeonSession({ input, audio, save, canvas, modal, tasks,
     collectPickups();
     if (damageTraps()) return; // урон о шипы мог обнулить забег → дальше не трогаем мёртвую сессию
     aimAndFire();
+    // Нова: тратим заряд только если есть по кому бить (пустую комнату не жжём).
+    if (input.consumePress('nova') && player.bombs > 0 && current.enemies.length > 0) {
+      player.bombs--;
+      const c = center();
+      combat.nova(current, c.x, c.y);
+      addShake(8);
+      if (!prefersReducedMotion()) { novaFx = NOVA_FX_TIME; novaCenter.x = c.x; novaCenter.y = c.y; }
+    }
+    if (novaFx > 0) novaFx -= dt;
     combat.update(dt, floor, current, center(), player.dmgMul, player.width / 2);
     updateSparks(dt);
 
@@ -291,6 +303,7 @@ export function createDungeonSession({ input, audio, save, canvas, modal, tasks,
     const n = 3 + ((Math.random() * 3) | 0); // 3–5 монет
     for (let i = 0; i < n; i++) arr.push({ x: rand(it.x0 + 40, it.x1 - 40), y: rand(it.y0 + 40, it.y1 - 40), kind: 'coin', value });
     if (Math.random() < 0.4) arr.push({ x: rand(it.x0 + 40, it.x1 - 40), y: rand(it.y0 + 40, it.y1 - 40), kind: 'heal', value: 2 });
+    if (Math.random() < 0.18) arr.push({ x: rand(it.x0 + 40, it.x1 - 40), y: rand(it.y0 + 40, it.y1 - 40), kind: 'bomb', value: 1 });
     return arr;
   }
 
@@ -301,6 +314,7 @@ export function createDungeonSession({ input, audio, save, canvas, modal, tasks,
       const p = current.pickups[i];
       if (Math.hypot(c.x - p.x, c.y - p.y) > 28) continue;
       if (p.kind === 'coin') player.coins += p.value;
+      else if (p.kind === 'bomb') player.bombs += 1;
       else player.hp = Math.min(player.maxHp, player.hp + p.value);
       audio?.play?.('coin');
       current.pickups.splice(i, 1);
@@ -347,6 +361,12 @@ export function createDungeonSession({ input, audio, save, canvas, modal, tasks,
     drawTraps(ctx, current, time); // шипы под сущностями — по ним ходят
     combat.draw(ctx, current);
     drawSparks(ctx);
+    if (novaFx > 0) { // расширяющееся кольцо ударной волны
+      const p = 1 - novaFx / NOVA_FX_TIME;
+      ctx.strokeStyle = `rgba(200,170,255,${(novaFx / NOVA_FX_TIME) * 0.85})`;
+      ctx.lineWidth = 6;
+      ctx.beginPath(); ctx.arc(novaCenter.x, novaCenter.y, p * NOVA_RADIUS, 0, Math.PI * 2); ctx.stroke();
+    }
 
     const px = lerp(player.prevX, player.x, alpha);
     const bob = moving ? -Math.abs(Math.sin(walkPhase)) * 3 : 0;
@@ -376,7 +396,8 @@ export function createDungeonSession({ input, audio, save, canvas, modal, tasks,
     if (boss) drawBossBar(ctx, boss); // в комнате босса — его полоска вместо счётчика
     else drawEnemiesLeft(ctx, activeCombat ? current.enemies.length : 0);
     drawFloorBanner(ctx, floor.floorNumber, bannerTime / 0.5); // альфа>1 держит баннер, <1 гасит
-    touch.draw(ctx); // джойстики поверх (только когда есть касания)
+    touch.setBombs(player.bombs);
+    touch.draw(ctx); // джойстики + кнопка «Нова» поверх
   }
 
   function drawSparks(ctx) {

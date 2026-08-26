@@ -20,6 +20,8 @@ const ENEMY_COLOR = { chaser: PALETTE.coral, shooter: '#f0a04b', tank: '#8a3a52'
 // (танк тяжёлый, босс не сдвигается) — чтобы удар ощущался, но не ломал бой.
 const KB_STRENGTH = 230, KB_DECAY = 0.85;
 const KB_MASS = { chaser: 1, shooter: 1, tank: 0.35, boss: 0 };
+// Нова знаний (расходник): урон всем врагам в комнате + сильный отброс от центра.
+const NOVA_DMG = 6, NOVA_KB = 420;
 // Кривая сложности по этажам (подобрано на ощупь, крутится безопасно). Этаж 1 —
 // нулевая надбавка: раннее прохождение остаётся мягким.
 const ENEMY_CAP = 12;                       // потолок числа врагов в комнате
@@ -52,6 +54,20 @@ export function createCombat({ audio, hitPlayer, onClear, onEnemyHit }) {
   function fire(cx, cy, aim) {
     shots.push({ x: cx + aim.x * 20, y: cy + aim.y * 20, vx: aim.x * SHOT_SPEED, vy: aim.y * SHOT_SPEED, life: SHOT_LIFE });
     audio?.play?.('shoot');
+  }
+
+  // Разрядка «Новы»: бьёт всех живых врагов комнаты и расшвыривает их от центра.
+  // Смерти обработает следующий тик update (там же зачистка комнаты и дроп).
+  function nova(current, cx, cy) {
+    for (const e of current.enemies) {
+      if (e.hp <= 0) continue;
+      e.hp -= NOVA_DMG;
+      e.hitFlash = HIT_FLASH;
+      const dx = e.x - cx, dy = e.y - cy, d = Math.hypot(dx, dy) || 1, m = KB_MASS[e.kind] ?? 1;
+      e.knockX += (dx / d) * NOVA_KB * m;
+      e.knockY += (dy / d) * NOVA_KB * m;
+    }
+    audio?.play?.('nova');
   }
 
   // Поведение босса по варианту. Стрелок (gunner) медленно идёт и бьёт радиальным
@@ -164,7 +180,7 @@ export function createCombat({ audio, hitPlayer, onClear, onEnemyHit }) {
     for (const s of shots) { ctx.beginPath(); ctx.arc(s.x, s.y, SHOT_R, 0, Math.PI * 2); ctx.fill(); }
   }
 
-  return { reset, spawnEnemies, fire, update, draw };
+  return { reset, spawnEnemies, fire, nova, update, draw };
 }
 
 // Глубже — меньше простых преследователей, больше стрелков и танков.

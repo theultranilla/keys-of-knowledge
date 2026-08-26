@@ -93,6 +93,11 @@ export function createAudio(settings = { sound: true }) {
     bossShot: () => tone({ from: 300, to: 140, type: 'square', duration: 0.14, gain: 0.11 }),
     // Выезд шипов: короткий металлический «шшк» — слышно предупреждение, даже не глядя.
     trap: () => tone({ from: 700, to: 260, type: 'sawtooth', duration: 0.08, gain: 0.07 }),
+    // Нова знаний: низкий «бух» + восходящий свист — мощная разрядка.
+    nova: () => {
+      tone({ from: 130, to: 40, type: 'sawtooth', duration: 0.3, gain: 0.18 });
+      tone({ from: 420, to: 950, type: 'triangle', duration: 0.22, gain: 0.1 });
+    },
     complete: () => {
       [NOTE.c5, NOTE.e5, NOTE.g5, NOTE.c6].forEach((note, index) =>
         tone({ from: note, duration: 0.4, gain: 0.16, delay: index * 0.12 })

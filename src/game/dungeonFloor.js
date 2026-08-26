@@ -140,10 +140,11 @@ export function drawRooms(ctx, floor) {
   for (const room of floor.rooms) for (const r of roomWalls(room)) ctx.fillRect(r.x, r.y, r.w, r.h);
   // пикапы (монеты/лечение), выпавшие с боёв
   for (const room of floor.rooms) if (room.pickups) for (const p of room.pickups) {
-    ctx.fillStyle = p.kind === 'coin' ? '#f6d24d' : '#e0645f';
+    ctx.fillStyle = p.kind === 'coin' ? '#f6d24d' : p.kind === 'bomb' ? '#9e73ee' : '#e0645f';
     ctx.beginPath();
-    ctx.arc(p.x, p.y, 8, 0, Math.PI * 2);
+    ctx.arc(p.x, p.y, p.kind === 'bomb' ? 10 : 8, 0, Math.PI * 2);
     ctx.fill();
+    if (p.kind === 'bomb') { ctx.fillStyle = '#efeaff'; ctx.fillRect(p.x - 1, p.y - 4, 2, 8); ctx.fillRect(p.x - 4, p.y - 1, 8, 2); } // искорка-звёздочка
   }
 
   // сундуки-выбор + прилавки лавки (с подписями)
