@@ -3,7 +3,7 @@ import { drawCharacter } from '../engine/character.js';
 import { DEFAULT_SKIN } from './skins.js';
 import {
   generateFloor, roomInterior, roomContains, allWalls, drawRooms, spawnChests, spawnShop, bossReward,
-  spawnTraps, drawTraps, trapsOut, TRAP_SIZE, ROOM_H, WALL
+  spawnTraps, drawTraps, trapsOut, TRAP_SIZE, spawnObstacles, ROOM_H, WALL
 } from './dungeonFloor.js';
 import { createDungeonTouch } from './dungeonTouch.js';
 import { createCombat } from './dungeonCombat.js';
@@ -57,6 +57,7 @@ export function createDungeonSession({ input, audio, save, canvas, modal, tasks,
     spawnChests(floor); // сундуки-выбор в сокровищницах
     spawnShop(floor);   // прилавки в лавках
     spawnTraps(floor);  // шипы в части боевых комнат
+    spawnObstacles(floor); // столбы-укрытия в боевых комнатах
     current = floor.start;
     current.visited = true;
     player.x = current.cx - player.width / 2;

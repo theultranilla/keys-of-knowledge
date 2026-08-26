@@ -85,6 +85,27 @@ export function generateFloor(floorNumber, roomCount = 8) {
   return { rooms, roomByCell, start: roomByCell.get('0,0'), floorNumber };
 }
 
+// Столбы-укрытия в боевых комнатах: разные расстановки (в тайлах от центра).
+// Держатся в глубине интерьера, далеко от дверей — комната всегда проходима.
+const PILLAR = 2 * TILE;
+const OBSTACLE_TEMPLATES = [
+  [],                                  // пусто — не в каждой комнате
+  [[-6, -3], [6, -3], [-6, 3], [6, 3]], // четыре столба по углам
+  [[0, -3.5], [0, 3.5]],               // два по центру, верх и низ
+  [[-6, 0], [6, 0]],                   // два по бокам
+  [[-6, -3], [0, 0], [6, 3]]           // диагональ через центр
+];
+
+export function spawnObstacles(floor) {
+  for (const room of floor.rooms) {
+    if (room.kind !== 'combat') continue; // только бои: сундукам/лавке/порталу не мешаем
+    const tpl = OBSTACLE_TEMPLATES[(Math.random() * OBSTACLE_TEMPLATES.length) | 0];
+    room.obstacles = tpl.map(([tx, ty]) => ({
+      x: room.cx + tx * TILE - PILLAR / 2, y: room.cy + ty * TILE - PILLAR / 2, w: PILLAR, h: PILLAR
+    }));
+  }
+}
+
 export function roomInterior(room) {
   const hw = ROOM_W / 2, hh = ROOM_H / 2;
   return { x0: room.cx - hw + WALL, y0: room.cy - hh + WALL, x1: room.cx + hw - WALL, y1: room.cy + hh - WALL };
@@ -124,7 +145,10 @@ function vSeg(rects, y0, y1, x, t, open, cy, dh) {
 // Собрать стены всех комнат (комнат немного — дешевле пересчитать, чем кэшировать).
 export function allWalls(floor) {
   const rects = [];
-  for (const room of floor.rooms) for (const r of roomWalls(room)) rects.push(r);
+  for (const room of floor.rooms) {
+    for (const r of roomWalls(room)) rects.push(r);
+    if (room.obstacles) for (const o of room.obstacles) rects.push(o); // столбы = препятствия для игрока и пуль
+  }
   return rects;
 }
 
@@ -138,6 +162,13 @@ export function drawRooms(ctx, floor) {
   // стены
   ctx.fillStyle = '#151b34';
   for (const room of floor.rooms) for (const r of roomWalls(room)) ctx.fillRect(r.x, r.y, r.w, r.h);
+  // столбы-укрытия — чуть светлее стен, с бликом, чтобы читались как объекты в комнате
+  for (const room of floor.rooms) if (room.obstacles) for (const o of room.obstacles) {
+    ctx.fillStyle = '#26314f';
+    ctx.fillRect(o.x, o.y, o.w, o.h);
+    ctx.fillStyle = 'rgba(255,255,255,0.08)';
+    ctx.fillRect(o.x, o.y, o.w, 4);
+  }
   // пикапы (монеты/лечение), выпавшие с боёв
   for (const room of floor.rooms) if (room.pickups) for (const p of room.pickups) {
     ctx.fillStyle = p.kind === 'coin' ? '#f6d24d' : p.kind === 'bomb' ? '#9e73ee' : '#e0645f';
