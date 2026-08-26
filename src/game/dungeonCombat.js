@@ -181,6 +181,9 @@ export function createCombat({ audio, hitPlayer, onClear, onEnemyHit }) {
       }
       e.x = Math.max(it.x0 + e.r, Math.min(it.x1 - e.r, e.x));
       e.y = Math.max(it.y0 + e.r, Math.min(it.y1 - e.r, e.y));
+      // Столбы теперь твёрдые и для врагов, но выталкивание радиальное — враг
+      // скользит вдоль столба и обходит его, а не втыкается намертво (нет софт-лока).
+      if (current.obstacles) for (const o of current.obstacles) pushCircleOutOfRect(e, o);
       if (d < e.r + half && hitPlayer(CONTACT_DMG)) return;
     }
     if (current.enemies.length === 0) { current.cleared = true; current.doorsClosed = false; onClear(current); }
@@ -227,7 +230,7 @@ function makeEnemy(x, y, kind, floorNumber, elite = false, variant = 'gunner') {
     const hp = ENEMY_HP * 6 + floorNumber * 4;
     return {
       x, y, r: BOSS_R, hp, maxHp: hp, speed: BOSS_SPEED, kind, variant, elite: false, hitFlash: 0,
-      knockX: 0, knockY: 0, fireCd: 0, burstCd: BOSS_BURST_CD, burstAngle: 0,
+      knockX: 0, knockY: 0, swirl: Math.random() < 0.5 ? 1 : -1, fireCd: 0, burstCd: BOSS_BURST_CD, burstAngle: 0,
       chargeState: 'idle', chargeTimer: CHARGE_CD, chargeDir: { x: 0, y: 0 }
     };
   }
@@ -240,7 +243,31 @@ function makeEnemy(x, y, kind, floorNumber, elite = false, variant = 'gunner') {
   hp = Math.max(1, Math.round(hp * (1 + depth * RAMP_HP)));
   speed *= Math.min(SPEED_CAP, 1 + depth * RAMP_SPEED);
   if (elite) { r *= ELITE_R_MUL; hp = Math.round(hp * ELITE_HP_MUL); speed *= ELITE_SLOW; }
-  return { x, y, r, hp, maxHp: hp, speed, kind, elite, hitFlash: 0, knockX: 0, knockY: 0, fireCd: rand(0.5, SHOOTER_FIRE_CD) };
+  return { x, y, r, hp, maxHp: hp, speed, kind, elite, hitFlash: 0, knockX: 0, knockY: 0, swirl: Math.random() < 0.5 ? 1 : -1, fireCd: rand(0.5, SHOOTER_FIRE_CD) };
+}
+
+// Выталкивание круга-врага из прямоугольника-столба по кратчайшему направлению.
+// Тангенциальная часть движения сохраняется, поэтому враг соскальзывает и обходит.
+function pushCircleOutOfRect(e, o) {
+  const nx = Math.max(o.x, Math.min(e.x, o.x + o.w)); // ближайшая точка прямоугольника
+  const ny = Math.max(o.y, Math.min(e.y, o.y + o.h));
+  const dx = e.x - nx, dy = e.y - ny;
+  if (dx === 0 && dy === 0) { // центр внутри столба — по ближайшей грани
+    const left = e.x - o.x, right = o.x + o.w - e.x, top = e.y - o.y, bot = o.y + o.h - e.y;
+    const m = Math.min(left, right, top, bot);
+    if (m === left) e.x = o.x - e.r; else if (m === right) e.x = o.x + o.w + e.r;
+    else if (m === top) e.y = o.y - e.r; else e.y = o.y + o.h + e.r;
+    return;
+  }
+  const d2 = dx * dx + dy * dy;
+  if (d2 >= e.r * e.r) return; // не касается
+  const d = Math.sqrt(d2), push = e.r - d;
+  e.x += (dx / d) * push;
+  e.y += (dy / d) * push;
+  // Крошечное скольжение вдоль грани — ломает симметрию лобового упора, чтобы
+  // враг всегда обходил столб, а не залипал (страховка от софт-лока).
+  e.x += -(dy / d) * (e.swirl || 1) * 0.6;
+  e.y += (dx / d) * (e.swirl || 1) * 0.6;
 }
 
 function rand(lo, hi) { return lo + Math.random() * (hi - lo); }
