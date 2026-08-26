@@ -351,7 +351,15 @@ export function createDungeonSession({ input, audio, save, canvas, modal, tasks,
     const px = lerp(player.prevX, player.x, alpha);
     const bob = moving ? -Math.abs(Math.sin(walkPhase)) * 3 : 0;
     const py = lerp(player.prevY, player.y, alpha) + bob;
+    // Кадры неуязвимости после урона: мигаем. В спокойном режиме без вспышек —
+    // просто держим героя тусклым (инвариант reduced-motion + светочувствительность).
+    let heroAlpha = 1;
+    if (player.hurtCd > 0) {
+      heroAlpha = prefersReducedMotion() ? 0.5 : (Math.floor(player.hurtCd * 12) % 2 === 0 ? 0.3 : 1);
+    }
+    ctx.globalAlpha = heroAlpha;
     drawCharacter(ctx, px, py, player.width, player.height, skin, player.facing);
+    ctx.globalAlpha = 1;
     const cx = px + player.width / 2, cy = py + player.height / 2;
     ctx.strokeStyle = PALETTE.amber; ctx.lineWidth = 4; ctx.lineCap = 'round';
     ctx.beginPath(); ctx.moveTo(cx, cy); ctx.lineTo(cx + player.aim.x * 26, cy + player.aim.y * 26); ctx.stroke();

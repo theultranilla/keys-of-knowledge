@@ -16,6 +16,10 @@ const SHOOTER_RANGE = 250, SHOOTER_FIRE_CD = 1.3, SHOOTER_SPEED = 70;
 const TANK_R = 26, TANK_HP = 9, TANK_SPEED = 45;
 const ESHOT_SPEED = 280, ESHOT_R = 6, ESHOT_LIFE = 2.4, ESHOT_DMG = 1;
 const ENEMY_COLOR = { chaser: PALETTE.coral, shooter: '#f0a04b', tank: '#8a3a52', boss: '#b0343f' };
+// Отдача от попаданий: скорость толчка и затухание за кадр, плюс «масса» по типу
+// (танк тяжёлый, босс не сдвигается) — чтобы удар ощущался, но не ломал бой.
+const KB_STRENGTH = 230, KB_DECAY = 0.85;
+const KB_MASS = { chaser: 1, shooter: 1, tank: 0.35, boss: 0 };
 // Кривая сложности по этажам (подобрано на ощупь, крутится безопасно). Этаж 1 —
 // нулевая надбавка: раннее прохождение остаётся мягким.
 const ENEMY_CAP = 12;                       // потолок числа врагов в комнате
@@ -94,6 +98,9 @@ export function createCombat({ audio, hitPlayer, onClear, onEnemyHit }) {
       if (!dead) for (const e of current.enemies) {
         if (e.hp > 0 && Math.hypot(s.x - e.x, s.y - e.y) < e.r + SHOT_R) {
           e.hp -= SHOT_DMG * dmgMul; e.hitFlash = HIT_FLASH; dead = true;
+          const sl = Math.hypot(s.vx, s.vy) || 1, m = KB_MASS[e.kind] ?? 1;
+          e.knockX += (s.vx / sl) * KB_STRENGTH * m; // толчок по ходу пули
+          e.knockY += (s.vy / sl) * KB_STRENGTH * m;
           audio?.play?.('enemyHit'); onEnemyHit?.(s.x, s.y, false, false); break;
         }
       }
@@ -125,6 +132,11 @@ export function createCombat({ audio, hitPlayer, onClear, onEnemyHit }) {
       } else if (e.kind === 'boss') {
         bossBehavior(e, dt, nx, ny);
       } else { e.x += nx * e.speed * dt; e.y += ny * e.speed * dt; }
+      // Отдача от попаданий поверх обычного движения, с затуханием.
+      if (e.knockX || e.knockY) {
+        e.x += e.knockX * dt; e.y += e.knockY * dt;
+        e.knockX *= KB_DECAY; e.knockY *= KB_DECAY;
+      }
       e.x = Math.max(it.x0 + e.r, Math.min(it.x1 - e.r, e.x));
       e.y = Math.max(it.y0 + e.r, Math.min(it.y1 - e.r, e.y));
       if (d < e.r + half && hitPlayer(CONTACT_DMG)) return;
@@ -171,7 +183,7 @@ function makeEnemy(x, y, kind, floorNumber, elite = false, variant = 'gunner') {
     const hp = ENEMY_HP * 6 + floorNumber * 4;
     return {
       x, y, r: BOSS_R, hp, maxHp: hp, speed: BOSS_SPEED, kind, variant, elite: false, hitFlash: 0,
-      fireCd: 0, burstCd: BOSS_BURST_CD, burstAngle: 0,
+      knockX: 0, knockY: 0, fireCd: 0, burstCd: BOSS_BURST_CD, burstAngle: 0,
       chargeState: 'idle', chargeTimer: CHARGE_CD, chargeDir: { x: 0, y: 0 }
     };
   }
@@ -184,7 +196,7 @@ function makeEnemy(x, y, kind, floorNumber, elite = false, variant = 'gunner') {
   hp = Math.max(1, Math.round(hp * (1 + depth * RAMP_HP)));
   speed *= Math.min(SPEED_CAP, 1 + depth * RAMP_SPEED);
   if (elite) { r *= ELITE_R_MUL; hp = Math.round(hp * ELITE_HP_MUL); speed *= ELITE_SLOW; }
-  return { x, y, r, hp, maxHp: hp, speed, kind, elite, hitFlash: 0, fireCd: rand(0.5, SHOOTER_FIRE_CD) };
+  return { x, y, r, hp, maxHp: hp, speed, kind, elite, hitFlash: 0, knockX: 0, knockY: 0, fireCd: rand(0.5, SHOOTER_FIRE_CD) };
 }
 
 function rand(lo, hi) { return lo + Math.random() * (hi - lo); }
