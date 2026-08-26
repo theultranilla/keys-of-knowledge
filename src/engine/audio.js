@@ -93,6 +93,8 @@ export function createAudio(settings = { sound: true }) {
     bossShot: () => tone({ from: 300, to: 140, type: 'square', duration: 0.14, gain: 0.11 }),
     // Выезд шипов: короткий металлический «шшк» — слышно предупреждение, даже не глядя.
     trap: () => tone({ from: 700, to: 260, type: 'sawtooth', duration: 0.08, gain: 0.07 }),
+    // Рывок-уклонение: короткий восходящий «фвип».
+    dash: () => tone({ from: 300, to: 760, type: 'sine', duration: 0.1, gain: 0.09 }),
     // Нова знаний: низкий «бух» + восходящий свист — мощная разрядка.
     nova: () => {
       tone({ from: 130, to: 40, type: 'sawtooth', duration: 0.3, gain: 0.18 });

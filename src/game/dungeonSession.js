@@ -20,6 +20,7 @@ const PLAYER_HP = 6, CONTACT_CD = 0.8, CAM_SMOOTH = 8, PORTAL_R = 30;
 const BANNER_TIME = 1.6; // сколько держится баннер «Этаж N» при входе
 const COINS_PER_FLOOR = 4; // монет в кошелёк за спуск с этажа (× номер этажа — глубже щедрее)
 const NOVA_FX_TIME = 0.4, NOVA_RADIUS = 260; // ударная волна «Новы»: длительность и радиус
+const DASH_SPEED = 620, DASH_TIME = 0.16, DASH_CD = 0.7; // рывок: скорость, длительность (=окно неуязвимости), кулдаун
 
 export function createDungeonSession({ input, audio, save, canvas, modal, tasks, onDeath }) {
   const player = {
@@ -40,6 +41,8 @@ export function createDungeonSession({ input, audio, save, canvas, modal, tasks,
   let bankedThisRun = 0; // сколько монет забег уже отправил в кошелёк
   let novaFx = 0; // таймер ударной волны «Новы»
   const novaCenter = { x: 0, y: 0 };
+  let dashTime = 0, dashCd = 0; // рывок: остаток длительности и кулдаун
+  const dashDir = { x: 1, y: 0 };
   const sparks = [];
 
   const combat = createCombat({
@@ -103,6 +106,9 @@ export function createDungeonSession({ input, audio, save, canvas, modal, tasks,
     if (out && !trapsWereOut && current.traps) audio?.play?.('trap');
     trapsWereOut = out;
 
+    if (dashCd > 0) dashCd -= dt;
+    if (input.consumePress('dash') && dashCd <= 0 && dashTime <= 0) startDash();
+
     move(dt);
     clampToRooms();  // страховка: никогда не оказаться за пределами всех комнат
     trackRoom();
@@ -141,7 +147,27 @@ export function createDungeonSession({ input, audio, save, canvas, modal, tasks,
     }
   }
 
+  // Направление рывка — по движению, а стоя на месте — по прицелу.
+  function startDash() {
+    let dx = (input.isDown('right') ? 1 : 0) - (input.isDown('left') ? 1 : 0);
+    let dy = (input.isDown('down') ? 1 : 0) - (input.isDown('up') ? 1 : 0);
+    if (touch.state.move.x || touch.state.move.y) { dx = touch.state.move.x; dy = touch.state.move.y; }
+    const m = Math.hypot(dx, dy);
+    if (m > 0.1) { dashDir.x = dx / m; dashDir.y = dy / m; }
+    else { dashDir.x = player.aim.x; dashDir.y = player.aim.y; }
+    dashTime = DASH_TIME; dashCd = DASH_CD;
+    audio?.play?.('dash');
+  }
+
   function move(dt) {
+    const walls = allWalls(floor);
+    if (dashTime > 0) { // рывок перекрывает обычное управление
+      dashTime -= dt;
+      moving = false; // без покачивания в рывке
+      player.x += dashDir.x * DASH_SPEED * dt; resolve(walls, dashDir.x, 'x');
+      player.y += dashDir.y * DASH_SPEED * dt; resolve(walls, dashDir.y, 'y');
+      return;
+    }
     let mx = (input.isDown('right') ? 1 : 0) - (input.isDown('left') ? 1 : 0);
     let my = (input.isDown('down') ? 1 : 0) - (input.isDown('up') ? 1 : 0);
     if (touch.state.move.x || touch.state.move.y) { mx = touch.state.move.x; my = touch.state.move.y; }
@@ -151,7 +177,6 @@ export function createDungeonSession({ input, audio, save, canvas, modal, tasks,
     if (moving) walkPhase += dt * 14; // фаза «шага» для покачивания
     const nx = mx / mag, ny = my / mag;
     const speed = MOVE_SPEED * Math.min(1, mag); // наклон стика = скорость (аналог)
-    const walls = allWalls(floor);
     player.x += nx * speed * dt; resolve(walls, nx, 'x');
     player.y += ny * speed * dt; resolve(walls, ny, 'y');
   }
@@ -214,7 +239,7 @@ export function createDungeonSession({ input, audio, save, canvas, modal, tasks,
 
   // Урон игроку (зовёт бой). true — если погиб (забег сброшен).
   function hitPlayer(dmg) {
-    if (player.hurtCd > 0 || dead) return false;
+    if (player.hurtCd > 0 || dead || dashTime > 0) return false; // рывок даёт кадры неуязвимости
     player.hp = Math.max(0, player.hp - dmg);
     player.hurtCd = CONTACT_CD;
     addShake(7);
@@ -372,6 +397,12 @@ export function createDungeonSession({ input, audio, save, canvas, modal, tasks,
     const px = lerp(player.prevX, player.x, alpha);
     const bob = moving ? -Math.abs(Math.sin(walkPhase)) * 3 : 0;
     const py = lerp(player.prevY, player.y, alpha) + bob;
+    // Шлейф рывка — пара бледных копий позади (в спокойном режиме не рисуем).
+    if (dashTime > 0 && !prefersReducedMotion()) {
+      ctx.globalAlpha = 0.22;
+      for (let k = 1; k <= 2; k++) drawCharacter(ctx, px - dashDir.x * 11 * k, py - dashDir.y * 11 * k, player.width, player.height, skin, player.facing);
+      ctx.globalAlpha = 1;
+    }
     // Кадры неуязвимости после урона: мигаем. В спокойном режиме без вспышек —
     // просто держим героя тусклым (инвариант reduced-motion + светочувствительность).
     let heroAlpha = 1;
@@ -398,7 +429,8 @@ export function createDungeonSession({ input, audio, save, canvas, modal, tasks,
     else drawEnemiesLeft(ctx, activeCombat ? current.enemies.length : 0);
     drawFloorBanner(ctx, floor.floorNumber, bannerTime / 0.5); // альфа>1 держит баннер, <1 гасит
     touch.setBombs(player.bombs);
-    touch.draw(ctx); // джойстики + кнопка «Нова» поверх
+    touch.setDashReady(dashCd <= 0);
+    touch.draw(ctx); // джойстики + кнопки «Рывок»/«Нова» поверх
   }
 
   function drawSparks(ctx) {
