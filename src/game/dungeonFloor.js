@@ -96,6 +96,14 @@ const OBSTACLE_TEMPLATES = [
   [[-6, -3], [0, 0], [6, 3]]           // диагональ через центр
 ];
 
+// Логово мини-босса: с этажа 3 одна боевая комната получает флаг mini —
+// там вместо толпы усиленный враг с миньонами и гарантированный дроп.
+export function spawnMini(floor) {
+  if (floor.floorNumber < 3) return;
+  const combats = floor.rooms.filter((r) => r.kind === 'combat');
+  if (combats.length) combats[(Math.random() * combats.length) | 0].mini = true;
+}
+
 export function spawnObstacles(floor) {
   for (const room of floor.rooms) {
     if (room.kind !== 'combat') continue; // только бои: сундукам/лавке/порталу не мешаем

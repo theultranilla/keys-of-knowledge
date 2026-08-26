@@ -3,7 +3,7 @@ import { drawCharacter } from '../engine/character.js';
 import { DEFAULT_SKIN } from './skins.js';
 import {
   generateFloor, roomInterior, roomContains, allWalls, drawRooms, spawnChests, spawnShop, bossReward,
-  spawnTraps, drawTraps, trapsOut, TRAP_SIZE, spawnObstacles, ROOM_H, WALL
+  spawnTraps, drawTraps, trapsOut, TRAP_SIZE, spawnObstacles, spawnMini, ROOM_H, WALL
 } from './dungeonFloor.js';
 import { createDungeonTouch } from './dungeonTouch.js';
 import { createCombat, WEAPONS, WEAPON_DROPS } from './dungeonCombat.js';
@@ -61,6 +61,7 @@ export function createDungeonSession({ input, audio, save, canvas, modal, tasks,
     spawnShop(floor);   // прилавки в лавках
     spawnTraps(floor);  // шипы в части боевых комнат
     spawnObstacles(floor); // столбы-укрытия в боевых комнатах
+    spawnMini(floor);      // логово мини-босса (с этажа 3)
     current = floor.start;
     current.visited = true;
     player.x = current.cx - player.width / 2;
@@ -262,6 +263,11 @@ export function createDungeonSession({ input, audio, save, canvas, modal, tasks,
     } else {
       // concat, а не присваивание: монеты, выпавшие с элиток по ходу боя, не теряем
       room.pickups = (room.pickups || []).concat(dropCoins(room));
+      if (room.mini) { // за логово — гарантированный дроп: оружие + заряд «Новы»
+        const opts = WEAPON_DROPS.filter((w) => w !== player.weapon);
+        room.pickups.push({ x: room.cx - 24, y: room.cy, kind: 'weapon', weaponId: opts[(Math.random() * opts.length) | 0] });
+        room.pickups.push({ x: room.cx + 24, y: room.cy, kind: 'bomb', value: 1 });
+      }
     }
   }
 

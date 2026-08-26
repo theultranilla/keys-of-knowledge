@@ -38,6 +38,7 @@ const RAMP_SPEED = 0.04, SPEED_CAP = 1.4;   // прирост скорости �
 // Элитные враги: редкие крупные с этажа 3, крепче и медленнее, роняют монету.
 const ELITE_FLOOR = 3, ELITE_CHANCE = 0.12;
 const ELITE_HP_MUL = 2.2, ELITE_R_MUL = 1.5, ELITE_SLOW = 0.85;
+const MINI_R = 24, MINI_COLOR = '#c77dff'; // мини-босс: между рядовым врагом и боссом этажа
 
 export function createCombat({ audio, hitPlayer, onClear, onEnemyHit }) {
   const shots = [], eShots = [];
@@ -52,6 +53,17 @@ export function createCombat({ audio, hitPlayer, onClear, onEnemyHit }) {
       return;
     }
     const it = roomInterior(room);
+    if (room.mini) { // логово: усиленный враг с паттерном босса + пара миньонов
+      const variant = Math.random() < 0.5 ? 'charger' : 'gunner';
+      const mb = makeEnemy(room.cx, room.cy - 40, 'boss', floorNumber, false, variant);
+      mb.mini = true; mb.r = MINI_R; mb.hp = mb.maxHp = ENEMY_HP * 4 + floorNumber * 2; // слабее финального босса
+      room.enemies.push(mb);
+      const minions = 2 + (floorNumber >= 5 ? 1 : 0);
+      for (let i = 0; i < minions; i++) {
+        room.enemies.push(makeEnemy(rand(it.x0 + 30, it.x1 - 30), rand(it.y0 + 30, it.y1 - 30), pickKind(floorNumber), floorNumber));
+      }
+      return;
+    }
     const n = Math.min(ENEMY_CAP, 4 + floorNumber); // с потолком, иначе глубокие этажи — каша
     for (let i = 0; i < n; i++) {
       const elite = floorNumber >= ELITE_FLOOR && Math.random() < ELITE_CHANCE;
@@ -177,7 +189,9 @@ export function createCombat({ audio, hitPlayer, onClear, onEnemyHit }) {
   function draw(ctx, current) {
     for (const e of current.enemies) {
       const charger = e.kind === 'boss' && e.variant === 'charger';
-      ctx.fillStyle = e.hitFlash > 0 ? '#ffffff' : (charger ? CHARGER_COLOR : (ENEMY_COLOR[e.kind] ?? PALETTE.coral));
+      let col = charger ? CHARGER_COLOR : (ENEMY_COLOR[e.kind] ?? PALETTE.coral);
+      if (e.mini) col = MINI_COLOR; // мини-босс — свой цвет
+      ctx.fillStyle = e.hitFlash > 0 ? '#ffffff' : col;
       ctx.beginPath(); ctx.arc(e.x, e.y, e.r, 0, Math.PI * 2); ctx.fill();
       if (e.elite) { // золотое кольцо — сразу видно, что враг опасный и с монетой
         ctx.strokeStyle = '#f6d24d'; ctx.lineWidth = 3;
