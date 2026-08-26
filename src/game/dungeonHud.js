@@ -11,23 +11,70 @@ const MINI_KIND = {
 };
 
 export function drawMinimap(ctx, floor, current) {
-  const step = 16, pad = 8;
+  const step = 18, pad = 11, r = 5;
   let minX = Infinity, maxX = -Infinity, minY = Infinity, maxY = -Infinity;
-  for (const r of floor.rooms) {
-    minX = Math.min(minX, r.cell.x); maxX = Math.max(maxX, r.cell.x);
-    minY = Math.min(minY, r.cell.y); maxY = Math.max(maxY, r.cell.y);
+  for (const rm of floor.rooms) {
+    minX = Math.min(minX, rm.cell.x); maxX = Math.max(maxX, rm.cell.x);
+    minY = Math.min(minY, rm.cell.y); maxY = Math.max(maxY, rm.cell.y);
   }
   const w = (maxX - minX + 1) * step + pad * 2, h = (maxY - minY + 1) * step + pad * 2;
   const ox = VIEW_WIDTH - w - 14, oy = 14;
-  ctx.fillStyle = 'rgba(0,0,0,0.4)';
+  ctx.fillStyle = 'rgba(0,0,0,0.45)';
   ctx.fillRect(ox, oy, w, h);
-  for (const r of floor.rooms) {
-    const x = ox + pad + (r.cell.x - minX) * step, y = oy + pad + (r.cell.y - minY) * step;
-    ctx.globalAlpha = r.visited ? 1 : 0.32; // непосещённые — призрачные
-    ctx.fillStyle = MINI_KIND[r.kind] ?? MINI_KIND.combat;
-    ctx.fillRect(x - 5, y - 5, 10, 10);
+
+  const cx = (cell) => ox + pad + (cell.x - minX) * step;
+  const cy = (cell) => oy + pad + (cell.y - minY) * step;
+
+  // Связи между комнатами: рисуем только вправо/вниз, чтобы не дублировать линию.
+  // Полная сетка видна сразу — понятно, куда идти, ещё до посещения.
+  ctx.strokeStyle = 'rgba(255,255,255,0.22)';
+  ctx.lineWidth = 2;
+  for (const rm of floor.rooms) {
+    const rightN = floor.roomByCell.get(`${rm.cell.x + 1},${rm.cell.y}`);
+    const downN = floor.roomByCell.get(`${rm.cell.x},${rm.cell.y + 1}`);
+    if (rm.doors.e && rightN) { ctx.beginPath(); ctx.moveTo(cx(rm.cell), cy(rm.cell)); ctx.lineTo(cx(rightN.cell), cy(rm.cell)); ctx.stroke(); }
+    if (rm.doors.s && downN) { ctx.beginPath(); ctx.moveTo(cx(rm.cell), cy(rm.cell)); ctx.lineTo(cx(rm.cell), cy(downN.cell)); ctx.stroke(); }
+  }
+
+  for (const rm of floor.rooms) {
+    ctx.globalAlpha = rm.visited ? 1 : 0.3; // непосещённые — призрачные
+    drawRoomMarker(ctx, cx(rm.cell), cy(rm.cell), rm.kind, r);
     ctx.globalAlpha = 1;
-    if (r === current) { ctx.strokeStyle = '#fff'; ctx.lineWidth = 2; ctx.strokeRect(x - 7, y - 7, 14, 14); }
+    if (rm === current) {
+      ctx.strokeStyle = '#fff';
+      ctx.lineWidth = 2;
+      ctx.strokeRect(cx(rm.cell) - r - 3, cy(rm.cell) - r - 3, (r + 3) * 2, (r + 3) * 2);
+    }
+  }
+}
+
+// Маркер комнаты по типу — форма важнее цвета: узнаётся и боковым зрением.
+function drawRoomMarker(ctx, x, y, kind, r) {
+  ctx.fillStyle = MINI_KIND[kind] ?? MINI_KIND.combat;
+  switch (kind) {
+    case 'boss':
+    case 'treasure': { // ромб; у босса — тёмный «глаз» в центре
+      ctx.beginPath();
+      ctx.moveTo(x, y - r - 1); ctx.lineTo(x + r + 1, y); ctx.lineTo(x, y + r + 1); ctx.lineTo(x - r - 1, y);
+      ctx.closePath(); ctx.fill();
+      if (kind === 'boss') { ctx.fillStyle = '#2a0a0e'; ctx.beginPath(); ctx.arc(x, y, 1.7, 0, Math.PI * 2); ctx.fill(); }
+      break;
+    }
+    case 'shop': { // квадрат с плюсом-«товаром»
+      ctx.fillRect(x - r, y - r, r * 2, r * 2);
+      ctx.fillStyle = '#efeaff';
+      ctx.fillRect(x - 1, y - 2.5, 2, 5);
+      ctx.fillRect(x - 2.5, y - 1, 5, 2);
+      break;
+    }
+    case 'start': { // кружок — точка старта
+      ctx.beginPath(); ctx.arc(x, y, r, 0, Math.PI * 2); ctx.fill();
+      break;
+    }
+    default: { // combat — квадратик поменьше
+      ctx.fillRect(x - r + 1, y - r + 1, (r - 1) * 2, (r - 1) * 2);
+      break;
+    }
   }
 }
 
