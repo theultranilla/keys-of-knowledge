@@ -9,6 +9,7 @@ import { createDungeonTouch } from './dungeonTouch.js';
 import { createCombat, WEAPONS, WEAPON_DROPS } from './dungeonCombat.js';
 import { drawMinimap, drawHp, drawEnemiesLeft, drawFloorBanner, drawBossBar } from './dungeonHud.js';
 import { prefersReducedMotion } from '../engine/motion.js';
+import { t } from '../ui/i18n.js';
 
 // Режим «Данж» (рогалик в духе Soul Knight). Этаж — карта комнат с дверями, камера держит
 // текущую комнату, боевые запираются до зачистки, за боссом портал. Сессия владеет игроком,
@@ -16,11 +17,12 @@ import { prefersReducedMotion } from '../engine/motion.js';
 // тач) — общий с платформером.
 
 const MOVE_SPEED = 235, MUZZLE_TIME = 0.05; // темп стрельбы теперь у оружия (WEAPONS)
-const PLAYER_HP = 6, CONTACT_CD = 0.8, CAM_SMOOTH = 8, PORTAL_R = 30;
+const PLAYER_HP = 6, CONTACT_CD = 0.8, CAM_SMOOTH = 8;
 const BANNER_TIME = 1.6; // сколько держится баннер «Этаж N» при входе
 const COINS_PER_FLOOR = 4; // монет в кошелёк за спуск с этажа (× номер этажа — глубже щедрее)
 const NOVA_FX_TIME = 0.4, NOVA_RADIUS = 260; // ударная волна «Новы»: длительность и радиус
 const DASH_SPEED = 620, DASH_TIME = 0.16, DASH_CD = 0.7; // рывок: скорость, длительность (=окно неуязвимости), кулдаун
+const INTERACT_R = 42; // дальность контекстного взаимодействия (E / тач-кнопка)
 
 export function createDungeonSession({ input, audio, save, canvas, modal, tasks, onDeath }) {
   const player = {
@@ -43,6 +45,7 @@ export function createDungeonSession({ input, audio, save, canvas, modal, tasks,
   const novaCenter = { x: 0, y: 0 };
   let dashTime = 0, dashCd = 0; // рывок: остаток длительности и кулдаун
   const dashDir = { x: 1, y: 0 };
+  let focus = null; // ближайшее взаимодействие: { type, target } или null
   const sparks = [];
 
   const combat = createCombat({
@@ -114,9 +117,9 @@ export function createDungeonSession({ input, audio, save, canvas, modal, tasks,
     clampToRooms();  // страховка: никогда не оказаться за пределами всех комнат
     trackRoom();
     maybeActivate(); // двери запираем, только когда игрок уже внутри (не в проёме)
-    tryChest();
-    tryShop();
-    collectPickups();
+    collectPickups(); // монеты/лечение/заряды подбираются сами; оружие — через взаимодействие
+    updateFocus();    // что рядом, с чем можно взаимодействовать
+    if (input.consumePress('interact') && focus) doInteract(focus);
     if (damageTraps()) return; // урон о шипы мог обнулить забег → дальше не трогаем мёртвую сессию
     aimAndFire();
     // Нова: тратим заряд только если есть по кому бить (пустую комнату не жжём).
@@ -134,18 +137,6 @@ export function createDungeonSession({ input, audio, save, canvas, modal, tasks,
     const tx = current.cx - VIEW_WIDTH / 2, ty = current.cy - VIEW_HEIGHT / 2;
     cam.x += (tx - cam.x) * Math.min(1, CAM_SMOOTH * dt);
     cam.y += (ty - cam.y) * Math.min(1, CAM_SMOOTH * dt);
-
-    if (current.portal) {
-      const c = center();
-      if (Math.hypot(c.x - current.portal.x, c.y - current.portal.y) < PORTAL_R) {
-        // Спуск = этаж пройден. Награда в кошелёк тем больше, чем глубже, и
-        // банкуется сразу — переживёт даже закрытие вкладки.
-        const reward = floor.floorNumber * COINS_PER_FLOOR;
-        bankedThisRun += reward;
-        save?.earnCoins?.(reward);
-        newFloor(floor.floorNumber + 1);
-      }
-    }
   }
 
   // Направление рывка — по движению, а стоя на месте — по прицелу.
@@ -298,13 +289,55 @@ export function createDungeonSession({ input, audio, save, canvas, modal, tasks,
     }
   }
 
-  // --- сундуки / экономика ---
-  function tryChest() {
-    if (!current.chests) return;
+  // --- контекстное взаимодействие ---
+  // Ищем ближайший предмет/портал в радиусе — с ним и работает кнопка «действие».
+  function updateFocus() {
+    if (busy) { focus = null; return; }
     const c = center();
-    for (const ch of current.chests) {
-      if (!ch.opened && Math.hypot(c.x - ch.x, c.y - ch.y) < 34) { openChest(ch); return; }
+    let best = null, bestD = INTERACT_R;
+    const near = (x, y) => { const d = Math.hypot(c.x - x, c.y - y); return d < bestD ? d : -1; };
+    if (current.pickups) for (const p of current.pickups) if (p.kind === 'weapon') {
+      const d = near(p.x, p.y); if (d >= 0) { best = { type: 'weapon', target: p }; bestD = d; }
     }
+    if (current.chests) for (const ch of current.chests) if (!ch.opened) {
+      const d = near(ch.x, ch.y); if (d >= 0) { best = { type: 'chest', target: ch }; bestD = d; }
+    }
+    if (current.stands) for (const st of current.stands) if (!st.bought) {
+      const d = near(st.x, st.y); if (d >= 0) { best = { type: 'shop', target: st }; bestD = d; }
+    }
+    if (current.portal) { const d = near(current.portal.x, current.portal.y); if (d >= 0) best = { type: 'portal', target: current.portal }; }
+    focus = best;
+  }
+
+  function doInteract(f) {
+    if (f.type === 'weapon') swapWeapon(f.target);
+    else if (f.type === 'chest') openChest(f.target);
+    else if (f.type === 'shop') buyStand(f.target);
+    else if (f.type === 'portal') descend();
+  }
+
+  // Смена оружия: старое роняем на месте — можно взять обратно (тот же пикап
+  // переиспользуем под прежний ствол).
+  function swapWeapon(p) {
+    const c = center(), old = player.weapon;
+    player.weapon = p.weaponId;
+    p.weaponId = old; p.x = c.x; p.y = c.y;
+    audio?.play?.('key');
+  }
+
+  function buyStand(st) {
+    if (st.bought || player.coins < st.cost) return;
+    player.coins -= st.cost;
+    st.bought = true;
+    applyReward(st.reward, false); // заплатил монетами — сильная версия
+  }
+
+  function descend() {
+    // Спуск = этаж пройден. Награда в кошелёк тем больше, чем глубже, банкуется сразу.
+    const reward = floor.floorNumber * COINS_PER_FLOOR;
+    bankedThisRun += reward;
+    save?.earnCoins?.(reward);
+    newFloor(floor.floorNumber + 1);
   }
 
   async function openChest(ch) {
@@ -349,12 +382,12 @@ export function createDungeonSession({ input, audio, save, canvas, modal, tasks,
     const c = center();
     for (let i = current.pickups.length - 1; i >= 0; i--) {
       const p = current.pickups[i];
+      if (p.kind === 'weapon') continue; // оружие подбирается только через взаимодействие (E), не само
       if (Math.hypot(c.x - p.x, c.y - p.y) > 28) continue;
       if (p.kind === 'coin') player.coins += p.value;
       else if (p.kind === 'bomb') player.bombs += 1;
-      else if (p.kind === 'weapon') player.weapon = p.weaponId;
       else player.hp = Math.min(player.maxHp, player.hp + p.value);
-      audio?.play?.(p.kind === 'weapon' ? 'key' : 'coin');
+      audio?.play?.('coin');
       current.pickups.splice(i, 1);
     }
   }
@@ -373,17 +406,14 @@ export function createDungeonSession({ input, audio, save, canvas, modal, tasks,
     return false;
   }
 
-  function tryShop() {
-    if (!current.stands) return;
-    const c = center();
-    for (const st of current.stands) {
-      if (st.bought || player.coins < st.cost) continue;
-      if (Math.hypot(c.x - st.x, c.y - st.y) < 30) {
-        player.coins -= st.cost;
-        st.bought = true;
-        applyReward(st.reward, false); // заплатил монетами — даём сильную версию
-      }
-    }
+  // Текст подсказки для текущего взаимодействия (и над героем, и на тач-кнопке).
+  function focusLabel() {
+    if (!focus) return null;
+    if (focus.type === 'weapon') return t('dungeon.take', { name: (WEAPONS[focus.target.weaponId] || WEAPONS.spark).name });
+    if (focus.type === 'chest') return t('dungeon.open');
+    if (focus.type === 'shop') return t('dungeon.buy', { label: focus.target.label, cost: focus.target.cost });
+    if (focus.type === 'portal') return t('dungeon.descend');
+    return null;
   }
 
   function render(ctx, alpha) {
@@ -432,6 +462,21 @@ export function createDungeonSession({ input, audio, save, canvas, modal, tasks,
       ctx.beginPath(); ctx.arc(cx + player.aim.x * 28, cy + player.aim.y * 28, 7, 0, Math.PI * 2); ctx.fill();
     }
 
+    // Подсказка взаимодействия над героем (клавиша E на ПК; на телефоне — тач-кнопка).
+    if (focus) {
+      const label = focusLabel() + '  (E)';
+      ctx.font = 'bold 13px sans-serif';
+      ctx.textAlign = 'center';
+      ctx.textBaseline = 'middle';
+      const w = ctx.measureText(label).width + 16, bx = px + player.width / 2, by = py - 20;
+      ctx.fillStyle = 'rgba(0,0,0,0.7)';
+      ctx.fillRect(bx - w / 2, by - 11, w, 22);
+      ctx.fillStyle = '#fff';
+      ctx.fillText(label, bx, by);
+      ctx.textAlign = 'left';
+      ctx.textBaseline = 'alphabetic';
+    }
+
     ctx.restore();
     drawMinimap(ctx, floor, current);
     drawHp(ctx, player, floor.floorNumber, (WEAPONS[player.weapon] || WEAPONS.spark).name);
@@ -442,7 +487,8 @@ export function createDungeonSession({ input, audio, save, canvas, modal, tasks,
     drawFloorBanner(ctx, floor.floorNumber, bannerTime / 0.5); // альфа>1 держит баннер, <1 гасит
     touch.setBombs(player.bombs);
     touch.setDashReady(dashCd <= 0);
-    touch.draw(ctx); // джойстики + кнопки «Рывок»/«Нова» поверх
+    touch.setInteract(focus ? focusLabel() : null); // контекстная кнопка — только когда есть с чем
+    touch.draw(ctx); // джойстики + кнопки «Рывок»/«Нова»/«Действие» поверх
   }
 
   function drawSparks(ctx) {

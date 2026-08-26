@@ -1,4 +1,5 @@
 import { VIEW_WIDTH, VIEW_HEIGHT } from '../engine/constants.js';
+import { roundedRect } from '../engine/shapes.js';
 
 // Экранное управление для данжа: два плавающих джойстика (touch-only). Левый —
 // движение, правый — прицел и автогонь (пока держишь). Появляются под пальцем,
@@ -13,11 +14,16 @@ const RADIUS = 78; // логических пикселей — «вылет» �
 const DASH_BTN = { x: VIEW_WIDTH - 52, y: VIEW_HEIGHT - 52, r: 30 };
 const NOVA_BTN = { x: VIEW_WIDTH - 52, y: VIEW_HEIGHT - 122, r: 30 };
 const inBtn = (p, b) => Math.hypot(p.x - b.x, p.y - b.y) <= b.r;
+// Контекстная кнопка «действие» — пилюля снизу по центру, видна и жмётся только
+// когда рядом есть с чем взаимодействовать (иначе не мешает).
+const ACT_BTN = { x: VIEW_WIDTH / 2, y: VIEW_HEIGHT - 56, w: 240, h: 46 };
+const inRect = (p, b) => Math.abs(p.x - b.x) <= b.w / 2 && Math.abs(p.y - b.y) <= b.h / 2;
 
 export function createDungeonTouch({ canvas, input }) {
-  let bombs = 0;         // «Нов» у игрока — счётчик на кнопке
-  let dashReady = true;  // рывок не на кулдауне — для яркости кнопки
-  let novaId = -1, dashId = -1;
+  let bombs = 0;             // «Нов» у игрока — счётчик на кнопке
+  let dashReady = true;      // рывок не на кулдауне — для яркости кнопки
+  let interactLabel = null;  // подпись контекстного действия или null
+  let novaId = -1, dashId = -1, actId = -1;
   const state = {
     move: { x: 0, y: 0 },
     aim: { x: 0, y: 0 },
@@ -37,6 +43,7 @@ export function createDungeonTouch({ canvas, input }) {
     if (e.pointerType !== 'touch') return;
     const p = toLogical(e);
     // Кнопки имеют приоритет над стиками — иначе тап по ним завёл бы джойстик.
+    if (interactLabel && inRect(p, ACT_BTN) && actId < 0) { actId = e.pointerId; input?.setAction('interact', true); return; }
     if (inBtn(p, DASH_BTN) && dashId < 0) { dashId = e.pointerId; input?.setAction('dash', true); return; }
     if (inBtn(p, NOVA_BTN) && novaId < 0) { novaId = e.pointerId; input?.setAction('nova', true); return; }
     if (p.x < VIEW_WIDTH / 2 && moveId < 0) {
@@ -58,7 +65,8 @@ export function createDungeonTouch({ canvas, input }) {
   };
 
   const onUp = (e) => {
-    if (e.pointerId === dashId) { dashId = -1; input?.setAction('dash', false); }
+    if (e.pointerId === actId) { actId = -1; input?.setAction('interact', false); }
+    else if (e.pointerId === dashId) { dashId = -1; input?.setAction('dash', false); }
     else if (e.pointerId === novaId) { novaId = -1; input?.setAction('nova', false); }
     else if (e.pointerId === moveId) { moveId = -1; state.move.x = state.move.y = 0; state.moveStick = null; }
     else if (e.pointerId === aimId) { aimId = -1; state.aiming = state.firing = false; state.aim.x = state.aim.y = 0; state.aimStick = null; }
@@ -87,12 +95,14 @@ export function createDungeonTouch({ canvas, input }) {
     state,
     setBombs(n) { bombs = n; },
     setDashReady(ready) { dashReady = ready; },
-    // Нарисовать джойстики и кнопки «Рывок»/«Нова» поверх сцены (экранные координаты).
+    setInteract(label) { interactLabel = label; },
+    // Нарисовать джойстики и кнопки поверх сцены (экранные координаты).
     draw(ctx) {
       drawStick(ctx, state.moveStick, 'rgba(120,180,255,');
       drawStick(ctx, state.aimStick, 'rgba(255,180,90,');
       drawButton(ctx, DASH_BTN, 'Рывок', dashReady, '120,180,255');
       drawButton(ctx, NOVA_BTN, 'Нова ' + bombs, bombs > 0, '158,115,238');
+      if (interactLabel) drawActButton(ctx, interactLabel);
     },
     destroy() {
       canvas.removeEventListener('pointerdown', onDown);
@@ -117,6 +127,21 @@ function drawButton(ctx, btn, label, on, rgb) {
   ctx.textAlign = 'center';
   ctx.textBaseline = 'middle';
   ctx.font = 'bold 14px sans-serif';
+  ctx.fillText(label, x, y);
+  ctx.textAlign = 'left';
+  ctx.textBaseline = 'alphabetic';
+}
+
+// Контекстная кнопка-пилюля «действие» с подписью (взять/открыть/купить/вниз).
+function drawActButton(ctx, label) {
+  const { x, y, w, h } = ACT_BTN;
+  roundedRect(ctx, x - w / 2, y - h / 2, w, h, h / 2);
+  ctx.fillStyle = 'rgba(90,200,136,0.92)';
+  ctx.fill();
+  ctx.fillStyle = '#0c1226';
+  ctx.font = 'bold 16px sans-serif';
+  ctx.textAlign = 'center';
+  ctx.textBaseline = 'middle';
   ctx.fillText(label, x, y);
   ctx.textAlign = 'left';
   ctx.textBaseline = 'alphabetic';
