@@ -9,6 +9,9 @@ import { PALETTE } from '../engine/constants.js';
 export const SHOT_SPEED = 560, SHOT_LIFE = 1.1, SHOT_R = 5, SHOT_DMG = 1;
 const ENEMY_SPEED = 95, ENEMY_HP = 3, ENEMY_R = 15, HIT_FLASH = 0.08, CONTACT_DMG = 1;
 const BOSS_R = 30, BOSS_SPEED = 60, BOSS_BURST_CD = 2.2, BOSS_BURST_N = 10;
+// Босс-таранщик: подбирается, телеграфирует, делает быстрый рывок в игрока.
+const CHARGE_CD = 1.4, CHARGE_WIND = 0.5, CHARGE_DASH = 0.45, CHARGE_SPEED = 360;
+const CHARGER_COLOR = '#d1552b';
 const SHOOTER_RANGE = 250, SHOOTER_FIRE_CD = 1.3, SHOOTER_SPEED = 70;
 const TANK_R = 26, TANK_HP = 9, TANK_SPEED = 45;
 const ESHOT_SPEED = 280, ESHOT_R = 6, ESHOT_LIFE = 2.4, ESHOT_DMG = 1;
@@ -28,7 +31,12 @@ export function createCombat({ audio, hitPlayer, onClear, onEnemyHit }) {
   function reset() { shots.length = 0; eShots.length = 0; }
 
   function spawnEnemies(room, floorNumber) {
-    if (room.kind === 'boss') { room.enemies.push(makeEnemy(room.cx, room.cy - 60, 'boss', floorNumber)); return; }
+    if (room.kind === 'boss') {
+      // Чередуем типы боссов по этажам: нечётные — стрелок, чётные — таранщик.
+      const variant = floorNumber % 2 === 0 ? 'charger' : 'gunner';
+      room.enemies.push(makeEnemy(room.cx, room.cy - 60, 'boss', floorNumber, false, variant));
+      return;
+    }
     const it = roomInterior(room);
     const n = Math.min(ENEMY_CAP, 4 + floorNumber); // с потолком, иначе глубокие этажи — каша
     for (let i = 0; i < n; i++) {
@@ -40,6 +48,39 @@ export function createCombat({ audio, hitPlayer, onClear, onEnemyHit }) {
   function fire(cx, cy, aim) {
     shots.push({ x: cx + aim.x * 20, y: cy + aim.y * 20, vx: aim.x * SHOT_SPEED, vy: aim.y * SHOT_SPEED, life: SHOT_LIFE });
     audio?.play?.('shoot');
+  }
+
+  // Поведение босса по варианту. Стрелок (gunner) медленно идёт и бьёт радиальным
+  // залпом; таранщик (charger) подбирается, замирает-целится (телеграф) и делает
+  // быстрый рывок в зафиксированную точку — уклоняться надо вбок, а не назад.
+  function bossBehavior(e, dt, nx, ny) {
+    if (e.variant === 'charger') {
+      e.chargeTimer -= dt;
+      if (e.chargeState === 'dash') {
+        e.x += e.chargeDir.x * CHARGE_SPEED * dt;
+        e.y += e.chargeDir.y * CHARGE_SPEED * dt;
+        if (e.chargeTimer <= 0) { e.chargeState = 'idle'; e.chargeTimer = CHARGE_CD; }
+      } else if (e.chargeState === 'wind') {
+        // конец завода — фиксируем направление рывка на текущего игрока
+        if (e.chargeTimer <= 0) { e.chargeState = 'dash'; e.chargeTimer = CHARGE_DASH; e.chargeDir = { x: nx, y: ny }; audio?.play?.('bossShot'); }
+      } else {
+        e.x += nx * e.speed * 0.5 * dt; e.y += ny * e.speed * 0.5 * dt;
+        if (e.chargeTimer <= 0) { e.chargeState = 'wind'; e.chargeTimer = CHARGE_WIND; }
+      }
+      return;
+    }
+    // gunner
+    e.x += nx * e.speed * dt; e.y += ny * e.speed * dt;
+    e.burstCd -= dt;
+    if (e.burstCd <= 0) {
+      for (let k = 0; k < BOSS_BURST_N; k++) {
+        const a = (k / BOSS_BURST_N) * Math.PI * 2 + e.burstAngle;
+        eShots.push({ x: e.x, y: e.y, vx: Math.cos(a) * ESHOT_SPEED, vy: Math.sin(a) * ESHOT_SPEED, life: ESHOT_LIFE });
+      }
+      e.burstAngle += 0.4;
+      e.burstCd = BOSS_BURST_CD;
+      audio?.play?.('bossShot');
+    }
   }
 
   // pc — центр игрока {x,y}; half — половина ширины игрока; dmgMul — множитель урона.
@@ -81,22 +122,9 @@ export function createCombat({ audio, hitPlayer, onClear, onEnemyHit }) {
         else if (d < SHOOTER_RANGE - 30) { e.x -= nx * e.speed * dt; e.y -= ny * e.speed * dt; }
         e.fireCd -= dt;
         if (e.fireCd <= 0) { eShots.push({ x: e.x, y: e.y, vx: nx * ESHOT_SPEED, vy: ny * ESHOT_SPEED, life: ESHOT_LIFE }); e.fireCd = SHOOTER_FIRE_CD; }
+      } else if (e.kind === 'boss') {
+        bossBehavior(e, dt, nx, ny);
       } else { e.x += nx * e.speed * dt; e.y += ny * e.speed * dt; }
-      // Босс вдобавок к преследованию бьёт радиальным залпом — иначе он просто
-      // «большой преследователь». Каждый залп чуть провёрнут, чтобы не давать
-      // игроку статичные коридоры между пулями.
-      if (e.kind === 'boss') {
-        e.burstCd -= dt;
-        if (e.burstCd <= 0) {
-          for (let k = 0; k < BOSS_BURST_N; k++) {
-            const a = (k / BOSS_BURST_N) * Math.PI * 2 + e.burstAngle;
-            eShots.push({ x: e.x, y: e.y, vx: Math.cos(a) * ESHOT_SPEED, vy: Math.sin(a) * ESHOT_SPEED, life: ESHOT_LIFE });
-          }
-          e.burstAngle += 0.4;
-          e.burstCd = BOSS_BURST_CD;
-          audio?.play?.('bossShot');
-        }
-      }
       e.x = Math.max(it.x0 + e.r, Math.min(it.x1 - e.r, e.x));
       e.y = Math.max(it.y0 + e.r, Math.min(it.y1 - e.r, e.y));
       if (d < e.r + half && hitPlayer(CONTACT_DMG)) return;
@@ -106,11 +134,16 @@ export function createCombat({ audio, hitPlayer, onClear, onEnemyHit }) {
 
   function draw(ctx, current) {
     for (const e of current.enemies) {
-      ctx.fillStyle = e.hitFlash > 0 ? '#ffffff' : (ENEMY_COLOR[e.kind] ?? PALETTE.coral);
+      const charger = e.kind === 'boss' && e.variant === 'charger';
+      ctx.fillStyle = e.hitFlash > 0 ? '#ffffff' : (charger ? CHARGER_COLOR : (ENEMY_COLOR[e.kind] ?? PALETTE.coral));
       ctx.beginPath(); ctx.arc(e.x, e.y, e.r, 0, Math.PI * 2); ctx.fill();
       if (e.elite) { // золотое кольцо — сразу видно, что враг опасный и с монетой
         ctx.strokeStyle = '#f6d24d'; ctx.lineWidth = 3;
         ctx.beginPath(); ctx.arc(e.x, e.y, e.r + 3, 0, Math.PI * 2); ctx.stroke();
+      }
+      if (charger && e.chargeState === 'wind') { // телеграф рывка — уходи вбок
+        ctx.strokeStyle = '#ffe08a'; ctx.lineWidth = 3;
+        ctx.beginPath(); ctx.arc(e.x, e.y, e.r + 5, 0, Math.PI * 2); ctx.stroke();
       }
     }
     ctx.fillStyle = '#ff8a4b';
@@ -132,11 +165,15 @@ function pickKind(floorNumber) {
   return 'chaser';
 }
 
-function makeEnemy(x, y, kind, floorNumber, elite = false) {
+function makeEnemy(x, y, kind, floorNumber, elite = false, variant = 'gunner') {
   // Босс живёт по своей формуле HP и не попадает под общий множитель этажа.
   if (kind === 'boss') {
     const hp = ENEMY_HP * 6 + floorNumber * 4;
-    return { x, y, r: BOSS_R, hp, maxHp: hp, speed: BOSS_SPEED, kind, elite: false, hitFlash: 0, fireCd: 0, burstCd: BOSS_BURST_CD, burstAngle: 0 };
+    return {
+      x, y, r: BOSS_R, hp, maxHp: hp, speed: BOSS_SPEED, kind, variant, elite: false, hitFlash: 0,
+      fireCd: 0, burstCd: BOSS_BURST_CD, burstAngle: 0,
+      chargeState: 'idle', chargeTimer: CHARGE_CD, chargeDir: { x: 0, y: 0 }
+    };
   }
   let r = ENEMY_R, hp = ENEMY_HP, speed = ENEMY_SPEED;
   if (kind === 'shooter') { r = 14; hp = 2; speed = SHOOTER_SPEED; }
