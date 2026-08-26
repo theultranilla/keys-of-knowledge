@@ -92,7 +92,8 @@ const ru = {
   'dungeon.floor': 'Этаж {n}',
   'dungeon.coins': 'Монеты: {n}',
   'dungeon.enemiesLeft': 'Врагов: {n}',
-  'dungeon.boss': 'БОСС'
+  'dungeon.boss': 'БОСС',
+  'dungeon.weapon': 'Оружие: {name}'
 };
 
 // Похвалы за верный ответ — пул, из которого берём случайную, чтобы не приедалось.

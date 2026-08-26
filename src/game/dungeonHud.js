@@ -78,7 +78,7 @@ function drawRoomMarker(ctx, x, y, kind, r) {
   }
 }
 
-export function drawHp(ctx, player, floorNumber) {
+export function drawHp(ctx, player, floorNumber, weaponName) {
   const x = 18, y = 18, w = 220, h = 20;
   ctx.fillStyle = 'rgba(0,0,0,0.5)';
   ctx.fillRect(x, y, w, h);
@@ -89,6 +89,11 @@ export function drawHp(ctx, player, floorNumber) {
   ctx.textAlign = 'left';
   ctx.textBaseline = 'alphabetic';
   ctx.fillText(t('dungeon.floor', { n: floorNumber }) + '    ' + t('dungeon.coins', { n: player.coins }), x, y + h + 20);
+  if (weaponName) {
+    ctx.fillStyle = '#7fe3d4';
+    ctx.font = 'bold 14px sans-serif';
+    ctx.fillText(t('dungeon.weapon', { name: weaponName }), x, y + h + 40);
+  }
 }
 
 // Счётчик оставшихся врагов — только когда бой идёт (иначе не мешаем взгляду).

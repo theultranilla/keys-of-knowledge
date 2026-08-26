@@ -6,7 +6,15 @@ import { PALETTE } from '../engine/constants.js';
 // (hitPlayer — урон игроку, onClear — комната зачищена, onEnemyHit — искры-полировка).
 // Числа геймплея — на ощупь, крутить можно.
 
-export const SHOT_SPEED = 560, SHOT_LIFE = 1.1, SHOT_R = 5, SHOT_DMG = 1;
+// Оружие игрока: у каждого свой характер (скорострельность, урон, число дробин,
+// разброс, скорость/размер снаряда). Имена — контент, живут в данных. Числа на ощупь.
+export const WEAPONS = {
+  spark:  { name: 'Искра',      fireCd: 0.14, dmg: 1,   pellets: 1, spread: 0,    speed: 560, r: 5, life: 1.1 },
+  spread: { name: 'Тройка',     fireCd: 0.34, dmg: 1,   pellets: 3, spread: 0.22, speed: 520, r: 5, life: 0.9 },
+  rapid:  { name: 'Скорострел', fireCd: 0.07, dmg: 0.6, pellets: 1, spread: 0.05, speed: 640, r: 4, life: 0.9 },
+  heavy:  { name: 'Тяжёлая',    fireCd: 0.5,  dmg: 3,   pellets: 1, spread: 0,    speed: 480, r: 9, life: 1.3 }
+};
+export const WEAPON_DROPS = ['spread', 'rapid', 'heavy']; // что может выпасть (кроме стартовой «Искры»)
 const ENEMY_SPEED = 95, ENEMY_HP = 3, ENEMY_R = 15, HIT_FLASH = 0.08, CONTACT_DMG = 1;
 const BOSS_R = 30, BOSS_SPEED = 60, BOSS_BURST_CD = 2.2, BOSS_BURST_N = 10;
 // Босс-таранщик: подбирается, телеграфирует, делает быстрый рывок в игрока.
@@ -51,8 +59,14 @@ export function createCombat({ audio, hitPlayer, onClear, onEnemyHit }) {
     }
   }
 
-  function fire(cx, cy, aim) {
-    shots.push({ x: cx + aim.x * 20, y: cy + aim.y * 20, vx: aim.x * SHOT_SPEED, vy: aim.y * SHOT_SPEED, life: SHOT_LIFE });
+  function fire(cx, cy, aim, weaponId) {
+    const w = WEAPONS[weaponId] || WEAPONS.spark;
+    const base = Math.atan2(aim.y, aim.x);
+    for (let k = 0; k < w.pellets; k++) {
+      const a = base + (k - (w.pellets - 1) / 2) * w.spread; // веером вокруг прицела
+      const dx = Math.cos(a), dy = Math.sin(a);
+      shots.push({ x: cx + dx * 20, y: cy + dy * 20, vx: dx * w.speed, vy: dy * w.speed, life: w.life, dmg: w.dmg, r: w.r });
+    }
     audio?.play?.('shoot');
   }
 
@@ -112,8 +126,8 @@ export function createCombat({ audio, hitPlayer, onClear, onEnemyHit }) {
       s.x += s.vx * dt; s.y += s.vy * dt; s.life -= dt;
       let dead = s.life <= 0 || walls.some((r) => s.x > r.x && s.x < r.x + r.w && s.y > r.y && s.y < r.y + r.h);
       if (!dead) for (const e of current.enemies) {
-        if (e.hp > 0 && Math.hypot(s.x - e.x, s.y - e.y) < e.r + SHOT_R) {
-          e.hp -= SHOT_DMG * dmgMul; e.hitFlash = HIT_FLASH; dead = true;
+        if (e.hp > 0 && Math.hypot(s.x - e.x, s.y - e.y) < e.r + s.r) {
+          e.hp -= s.dmg * dmgMul; e.hitFlash = HIT_FLASH; dead = true;
           const sl = Math.hypot(s.vx, s.vy) || 1, m = KB_MASS[e.kind] ?? 1;
           e.knockX += (s.vx / sl) * KB_STRENGTH * m; // толчок по ходу пули
           e.knockY += (s.vy / sl) * KB_STRENGTH * m;
@@ -177,7 +191,7 @@ export function createCombat({ audio, hitPlayer, onClear, onEnemyHit }) {
     ctx.fillStyle = '#ff8a4b';
     for (const s of eShots) { ctx.beginPath(); ctx.arc(s.x, s.y, ESHOT_R, 0, Math.PI * 2); ctx.fill(); }
     ctx.fillStyle = PALETTE.chalk;
-    for (const s of shots) { ctx.beginPath(); ctx.arc(s.x, s.y, SHOT_R, 0, Math.PI * 2); ctx.fill(); }
+    for (const s of shots) { ctx.beginPath(); ctx.arc(s.x, s.y, s.r, 0, Math.PI * 2); ctx.fill(); }
   }
 
   return { reset, spawnEnemies, fire, nova, update, draw };

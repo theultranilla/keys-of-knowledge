@@ -171,6 +171,13 @@ export function drawRooms(ctx, floor) {
   }
   // пикапы (монеты/лечение), выпавшие с боёв
   for (const room of floor.rooms) if (room.pickups) for (const p of room.pickups) {
+    if (p.kind === 'weapon') { // «ствол» — сразу читается как оружие
+      ctx.fillStyle = '#57d6c4';
+      ctx.fillRect(p.x - 10, p.y - 4, 20, 8);
+      ctx.fillStyle = '#0c1226';
+      ctx.fillRect(p.x + 4, p.y - 2, 5, 4);
+      continue;
+    }
     ctx.fillStyle = p.kind === 'coin' ? '#f6d24d' : p.kind === 'bomb' ? '#9e73ee' : '#e0645f';
     ctx.beginPath();
     ctx.arc(p.x, p.y, p.kind === 'bomb' ? 10 : 8, 0, Math.PI * 2);

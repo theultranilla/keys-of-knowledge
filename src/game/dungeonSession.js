@@ -6,7 +6,7 @@ import {
   spawnTraps, drawTraps, trapsOut, TRAP_SIZE, spawnObstacles, ROOM_H, WALL
 } from './dungeonFloor.js';
 import { createDungeonTouch } from './dungeonTouch.js';
-import { createCombat } from './dungeonCombat.js';
+import { createCombat, WEAPONS, WEAPON_DROPS } from './dungeonCombat.js';
 import { drawMinimap, drawHp, drawEnemiesLeft, drawFloorBanner, drawBossBar } from './dungeonHud.js';
 import { prefersReducedMotion } from '../engine/motion.js';
 
@@ -15,7 +15,7 @@ import { prefersReducedMotion } from '../engine/motion.js';
 // камерой, экономикой и сборкой кадра; бой вынесен в dungeonCombat, общий слой (звук/скины/
 // тач) — общий с платформером.
 
-const MOVE_SPEED = 235, FIRE_COOLDOWN = 0.14, MUZZLE_TIME = 0.05;
+const MOVE_SPEED = 235, MUZZLE_TIME = 0.05; // темп стрельбы теперь у оружия (WEAPONS)
 const PLAYER_HP = 6, CONTACT_CD = 0.8, CAM_SMOOTH = 8, PORTAL_R = 30;
 const BANNER_TIME = 1.6; // сколько держится баннер «Этаж N» при входе
 const COINS_PER_FLOOR = 4; // монет в кошелёк за спуск с этажа (× номер этажа — глубже щедрее)
@@ -26,7 +26,7 @@ export function createDungeonSession({ input, audio, save, canvas, modal, tasks,
   const player = {
     x: 0, y: 0, width: PLAYER_WIDTH, height: PLAYER_HEIGHT,
     prevX: 0, prevY: 0, aim: { x: 1, y: 0 }, facing: 1,
-    hp: PLAYER_HP, maxHp: PLAYER_HP, hurtCd: 0, dmgMul: 1, coins: 0, bombs: 1
+    hp: PLAYER_HP, maxHp: PLAYER_HP, hurtCd: 0, dmgMul: 1, coins: 0, bombs: 1, weapon: 'spark'
   };
   let busy = false; // пока открыта карточка задачи — мир стоит
   let dead = false; // игрок погиб — забег заморожен до перезапуска
@@ -232,8 +232,9 @@ export function createDungeonSession({ input, audio, save, canvas, modal, tasks,
     player.facing = player.aim.x >= 0 ? 1 : -1;
 
     if ((firing || touch.state.firing) && fireCd <= 0) {
-      combat.fire(c.x, c.y, player.aim);
-      fireCd = FIRE_COOLDOWN; muzzle = MUZZLE_TIME;
+      combat.fire(c.x, c.y, player.aim, player.weapon);
+      fireCd = (WEAPONS[player.weapon] || WEAPONS.spark).fireCd; // темп зависит от оружия
+      muzzle = MUZZLE_TIME;
     }
   }
 
@@ -330,6 +331,10 @@ export function createDungeonSession({ input, audio, save, canvas, modal, tasks,
     for (let i = 0; i < n; i++) arr.push({ x: rand(it.x0 + 40, it.x1 - 40), y: rand(it.y0 + 40, it.y1 - 40), kind: 'coin', value });
     if (Math.random() < 0.4) arr.push({ x: rand(it.x0 + 40, it.x1 - 40), y: rand(it.y0 + 40, it.y1 - 40), kind: 'heal', value: 2 });
     if (Math.random() < 0.18) arr.push({ x: rand(it.x0 + 40, it.x1 - 40), y: rand(it.y0 + 40, it.y1 - 40), kind: 'bomb', value: 1 });
+    if (Math.random() < 0.14) { // редкий дроп оружия (не совпадает с текущим)
+      const opts = WEAPON_DROPS.filter((w) => w !== player.weapon);
+      arr.push({ x: rand(it.x0 + 40, it.x1 - 40), y: rand(it.y0 + 40, it.y1 - 40), kind: 'weapon', weaponId: opts[(Math.random() * opts.length) | 0] });
+    }
     return arr;
   }
 
@@ -341,8 +346,9 @@ export function createDungeonSession({ input, audio, save, canvas, modal, tasks,
       if (Math.hypot(c.x - p.x, c.y - p.y) > 28) continue;
       if (p.kind === 'coin') player.coins += p.value;
       else if (p.kind === 'bomb') player.bombs += 1;
+      else if (p.kind === 'weapon') player.weapon = p.weaponId;
       else player.hp = Math.min(player.maxHp, player.hp + p.value);
-      audio?.play?.('coin');
+      audio?.play?.(p.kind === 'weapon' ? 'key' : 'coin');
       current.pickups.splice(i, 1);
     }
   }
@@ -422,7 +428,7 @@ export function createDungeonSession({ input, audio, save, canvas, modal, tasks,
 
     ctx.restore();
     drawMinimap(ctx, floor, current);
-    drawHp(ctx, player, floor.floorNumber);
+    drawHp(ctx, player, floor.floorNumber, (WEAPONS[player.weapon] || WEAPONS.spark).name);
     const activeCombat = current.spawned && !current.cleared;
     const boss = activeCombat ? current.enemies.find((e) => e.kind === 'boss') : null;
     if (boss) drawBossBar(ctx, boss); // в комнате босса — его полоска вместо счётчика
