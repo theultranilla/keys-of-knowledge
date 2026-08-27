@@ -178,6 +178,24 @@ function drawHat(ctx, x, y, w, h, hat, facing) {
       ctx.fill();
       break;
     }
+    case 'bow': {
+      // Бантик на макушке: два лепестка и узелок по центру.
+      const by = y + h * 0.03;
+      ctx.beginPath();
+      ctx.moveTo(centerX, by);
+      ctx.lineTo(centerX - w * 0.3, by - h * 0.07);
+      ctx.lineTo(centerX - w * 0.3, by + h * 0.09);
+      ctx.closePath();
+      ctx.moveTo(centerX, by);
+      ctx.lineTo(centerX + w * 0.3, by - h * 0.07);
+      ctx.lineTo(centerX + w * 0.3, by + h * 0.09);
+      ctx.closePath();
+      ctx.fill();
+      ctx.beginPath();
+      ctx.arc(centerX, by, w * 0.09, 0, Math.PI * 2);
+      ctx.fill();
+      break;
+    }
     case 'hood': {
       // Купол капюшона над головой и боковые отвороты вдоль щёк — лицо открыто.
       ctx.beginPath();

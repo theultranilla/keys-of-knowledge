@@ -96,6 +96,7 @@ export function parseLevel(data, id = data?.id) {
     doors: data.doors ?? [],
     platforms: data.platforms ?? [],
     hazards: data.hazards ?? [],
+    cannons: data.cannons ?? [], // боковые пушки: периодически выпускают снаряды
 
     tileAt(column, line) {
       const row = rows[line];
@@ -116,6 +117,7 @@ export function parseLevel(data, id = data?.id) {
   checkAnchors(level, level.doors, 'door', 'doors', where);
   checkPlatforms(level, where);
   checkHazards(level, where);
+  checkCannons(level, where);
 
   // Без двери-выхода уровень нельзя закончить, и это молчаливый тупик —
   // ловим его при загрузке.
@@ -192,6 +194,26 @@ function checkHazards(level, where) {
     }
     if (hazard.mode != null && hazard.mode !== 'patrol' && hazard.mode !== 'fall') {
       throw new Error(`${where}: hazards[${index}].mode должен быть "patrol" или "fall"`);
+    }
+  });
+}
+
+// Пушки: стреляют снарядами вбок с заданным интервалом. Снаряд летит по прямой и
+// убивает касанием, как шип. Здесь только проверка полей.
+function checkCannons(level, where) {
+  level.cannons.forEach((cannon, index) => {
+    const at = cannon?.at;
+    if (!Array.isArray(at) || at.length !== 2) {
+      throw new Error(`${where}: cannons[${index}].at должен быть парой [колонка, строка]`);
+    }
+    if (cannon.dir !== -1 && cannon.dir !== 1) {
+      throw new Error(`${where}: cannons[${index}].dir должен быть -1 (влево) или 1 (вправо)`);
+    }
+    if (!(cannon.speed > 0)) {
+      throw new Error(`${where}: cannons[${index}].speed должен быть больше нуля`);
+    }
+    if (!(cannon.interval > 0)) {
+      throw new Error(`${where}: cannons[${index}].interval должен быть больше нуля`);
     }
   });
 }

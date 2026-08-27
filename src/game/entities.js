@@ -32,6 +32,10 @@ const DOOR_HEIGHT = TILE * 2;
 const FLAG_WIDTH = 18;
 const FLAG_HEIGHT = 30;
 const PLATFORM_HEIGHT = 12;
+// Снаряд пушки: хитбокс меньше картинки, как у монет и комет — цепляет телом,
+// а не пустым углом коробки.
+const PROJECTILE_HIT = 14;
+const CANNON_SIZE = 22;
 
 export function createEntities(level) {
   const coins = [];
@@ -180,6 +184,25 @@ export function createEntities(level) {
     };
   });
 
+  // Пушки: стоят на месте и раз в interval выпускают снаряд вбок (dir). Снаряд
+  // летит по прямой, убивает касанием и исчезает за краем уровня.
+  const cannons = (level.cannons ?? []).map((entry) => ({
+    column: entry.at[0],
+    line: entry.at[1],
+    x: entry.at[0] * TILE + (TILE - CANNON_SIZE) / 2,
+    y: entry.at[1] * TILE + (TILE - CANNON_SIZE) / 2,
+    width: CANNON_SIZE,
+    height: CANNON_SIZE,
+    dir: entry.dir,
+    speed: entry.speed,
+    interval: entry.interval,
+    kind: entry.kind === 'bullet' ? 'bullet' : 'ball',
+    // phase (0..1) — задержка первого выстрела в долях интервала: 0 — сразу,
+    // 0.5 — через полцикла. Разные phase = пушки палят вразнобой, а не залпом.
+    timer: (((((entry.phase ?? 0) % 1) + 1) % 1)) * entry.interval
+  }));
+  const projectiles = [];
+
   // Запертая дверь перегораживает проход. Открытая перестаёт быть препятствием,
   // поэтому уходит из этого списка.
   const solid = [...platforms, ...doors];
@@ -191,6 +214,23 @@ export function createEntities(level) {
     for (const hazard of hazards) {
       if (hazard.mode === 'fall') moveFalling(hazard, dt);
       else movePlatform(hazard, dt);
+    }
+    for (const cannon of cannons) {
+      cannon.timer -= dt;
+      if (cannon.timer <= 0) {
+        cannon.timer += cannon.interval;
+        const cx = cannon.x + cannon.width / 2, cy = cannon.y + cannon.height / 2;
+        projectiles.push({
+          x: cx - PROJECTILE_HIT / 2, y: cy - PROJECTILE_HIT / 2,
+          width: PROJECTILE_HIT, height: PROJECTILE_HIT,
+          vx: cannon.dir * cannon.speed, kind: cannon.kind
+        });
+      }
+    }
+    for (let i = projectiles.length - 1; i >= 0; i--) {
+      const p = projectiles[i];
+      p.x += p.vx * dt;
+      if (p.x < -TILE || p.x > level.widthPx + TILE) projectiles.splice(i, 1); // улетел за край
     }
     for (const coin of coins) {
       coin.phase = (coin.phase + dt * 0.6) % 1;
@@ -227,6 +267,14 @@ export function createEntities(level) {
       for (const hazard of hazards) {
         if (!overlaps(player, hazard)) continue;
         events.push({ type: 'spike', spike: hazard });
+        died = true;
+        break;
+      }
+    }
+    if (!died) {
+      for (const projectile of projectiles) {
+        if (!overlaps(player, projectile)) continue;
+        events.push({ type: 'spike', spike: projectile }); // снаряд убивает как шип
         break;
       }
     }
@@ -260,6 +308,8 @@ export function createEntities(level) {
     coins,
     spikes,
     hazards,
+    cannons,
+    projectiles,
     checkpoints,
     chests,
     doors,

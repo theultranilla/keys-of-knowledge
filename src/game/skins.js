@@ -46,6 +46,7 @@ export const COSMETICS = [
   { id: 'hat.none', category: 'hat', name: 'Без шапки', price: 0, style: null },
   { id: 'hat.cap', category: 'hat', name: 'Кепка', price: 20, style: 'cap', color: PALETTE.coral },
   { id: 'hat.beanie', category: 'hat', name: 'Шапочка', price: 20, style: 'beanie', color: PALETTE.teal },
+  { id: 'hat.bow', category: 'hat', name: 'Бантик', price: 30, style: 'bow', color: '#EF8FC0' },
   { id: 'hat.hood', category: 'hat', name: 'Капюшон', price: 40, style: 'hood', color: '#2B2F3A' },
   { id: 'hat.wizard', category: 'hat', name: 'Колпак мага', price: 55, style: 'wizard', color: '#9B7BD8' },
   { id: 'hat.tiara', category: 'hat', name: 'Тиара', price: 70, style: 'tiara', color: PALETTE.amber },

@@ -10,10 +10,48 @@ export function drawProps(ctx, entities, time) {
   for (const platform of entities.platforms) drawPlatform(ctx, platform);
   for (const spike of entities.spikes) drawSpike(ctx, spike);
   for (const hazard of entities.hazards) drawHazard(ctx, hazard, time);
+  if (entities.cannons) for (const cannon of entities.cannons) drawCannon(ctx, cannon);
+  if (entities.projectiles) for (const projectile of entities.projectiles) drawProjectile(ctx, projectile, time);
   for (const checkpoint of entities.checkpoints) drawCheckpoint(ctx, checkpoint);
   for (const chest of entities.chests) drawChest(ctx, chest);
   for (const door of entities.doors) drawDoor(ctx, door);
   for (const coin of entities.coins) drawCoin(ctx, coin, time);
+}
+
+// Пушка — тёмная тумба со стволом, смотрящим в сторону стрельбы.
+function drawCannon(ctx, cannon) {
+  const cx = cannon.x + cannon.width / 2, cy = cannon.y + cannon.height / 2;
+  ctx.fillStyle = '#3a4260';
+  roundedRect(ctx, cannon.x, cannon.y, cannon.width, cannon.height, 5);
+  ctx.fill();
+  ctx.strokeStyle = 'rgba(20, 27, 52, 0.6)';
+  ctx.lineWidth = 2;
+  roundedRect(ctx, cannon.x, cannon.y, cannon.width, cannon.height, 5);
+  ctx.stroke();
+  // ствол в сторону dir
+  ctx.fillStyle = '#20263f';
+  const bl = cannon.width * 0.5;
+  ctx.fillRect(cannon.dir > 0 ? cx : cx - bl, cy - 4, bl, 8);
+}
+
+// Снаряд — коралловый (цвет опасности): мяч кругом, пуля вытянутой капсулой.
+function drawProjectile(ctx, p, time) {
+  const cx = p.x + p.width / 2, cy = p.y + p.height / 2, r = p.width / 2 + 2;
+  ctx.fillStyle = PALETTE.coral;
+  if (p.kind === 'bullet') {
+    roundedRect(ctx, cx - r * 1.3, cy - r * 0.7, r * 2.6, r * 1.4, r * 0.7);
+    ctx.fill();
+    ctx.fillStyle = 'rgba(255,235,230,0.85)'; // носик по ходу движения
+    ctx.beginPath();
+    ctx.arc(cx + (p.vx > 0 ? r : -r), cy, r * 0.4, 0, Math.PI * 2);
+    ctx.fill();
+  } else {
+    ctx.beginPath(); ctx.arc(cx, cy, r, 0, Math.PI * 2); ctx.fill();
+    ctx.strokeStyle = 'rgba(20, 27, 52, 0.5)'; ctx.lineWidth = 1.5; ctx.stroke();
+    // блик, чтобы читался как объёмный мячик
+    ctx.fillStyle = 'rgba(255,235,230,0.7)';
+    ctx.beginPath(); ctx.arc(cx - r * 0.3, cy - r * 0.3, r * 0.28, 0, Math.PI * 2); ctx.fill();
+  }
 }
 
 function drawPlatform(ctx, platform) {
