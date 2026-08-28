@@ -42,6 +42,10 @@ const ENEMY_W = 26;
 const ENEMY_H = 24;
 const STOMP_MARGIN = 14;
 const ENEMY_DEATH_TIME = 0.22; // сколько «блин» лежит после топанья, прежде чем исчезнуть
+// Финиш-флаг: тонкий столб, коснулся — уровень пройден. Чем выше коснулся, тем
+// больше бонус — есть смысл заходить на флаг с разбегу/прыжка.
+const FLAG_POLE_W = 12;
+const FLAG_MAX_BONUS = 500;
 
 export function createEntities(level) {
   const coins = [];
@@ -227,6 +231,10 @@ export function createEntities(level) {
     };
   });
 
+  // Финиш-флаг (если есть): столб от пола вверх на height тайлов. Хитбокс — узкая
+  // вертикаль, коснулся в любом месте — засчитано.
+  const flag = level.flag ? buildFlag(level.flag) : null;
+
   // Запертая дверь перегораживает проход. Открытая перестаёт быть препятствием,
   // поэтому уходит из этого списка.
   const solid = [...platforms, ...doors];
@@ -330,6 +338,15 @@ export function createEntities(level) {
       }
     }
 
+    // Финиш-флаг: коснулся столба — уровень пройден. Бонус тем больше, чем выше
+    // точка касания (по центру игрока относительно высоты столба).
+    if (flag && !flag.reached && overlaps(player, flag)) {
+      flag.reached = true;
+      const touchY = player.y + player.height / 2;
+      const frac = Math.max(0, Math.min(1, (flag.baseY - touchY) / flag.poleHeight));
+      events.push({ type: 'goal', bonus: Math.round(frac * FLAG_MAX_BONUS) });
+    }
+
     // Запертая дверь твёрдая, поэтому «коснуться» её можно только вплотную —
     // проверяем чуть расширенный прямоугольник игрока, иначе касание не
     // засчитывается никогда.
@@ -362,6 +379,7 @@ export function createEntities(level) {
     cannons,
     projectiles,
     enemies,
+    flag,
     checkpoints,
     chests,
     doors,
@@ -391,6 +409,21 @@ function moveFalling(hazard, dt) {
 
   hazard.deltaX = ((hazard.toX - hazard.fromX) / hazard.span) * hazard.speed * dt;
   hazard.deltaY = ((hazard.toY - hazard.fromY) / hazard.span) * hazard.speed * dt;
+}
+
+function buildFlag(entry) {
+  const [column, line] = entry.at;
+  const poleTiles = entry.height ?? 6;
+  const baseY = (line + 1) * TILE;          // низ столба — на уровне пола
+  const poleHeight = poleTiles * TILE;
+  const topY = baseY - poleHeight;
+  return {
+    column, line,
+    x: column * TILE + (TILE - FLAG_POLE_W) / 2,
+    y: topY, baseY, topY, poleHeight,
+    width: FLAG_POLE_W, height: poleHeight,
+    reached: false
+  };
 }
 
 function movePlatform(platform, dt) {

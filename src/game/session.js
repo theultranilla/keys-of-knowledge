@@ -11,7 +11,7 @@ import { createEntities } from './entities.js';
 // вызовом onComplete, когда дверь открыта.
 
 export function createSession({ level, tasks, modal, hud, pop, input, audio, skin, onComplete }) {
-  const run = { coins: 0, lives: level.lives, keys: new Set(), elapsedMs: 0 };
+  const run = { coins: 0, lives: level.lives, keys: new Set(), elapsedMs: 0, stomps: 0, bonus: 0 };
   // Ключ на руках означает, что задача уже решена: перезапуск уровня не должен
   // возвращать её обратно.
   const solvedChests = new Set();
@@ -45,6 +45,8 @@ export function createSession({ level, tasks, modal, hud, pop, input, audio, ski
 
     run.coins = 0;
     run.lives = level.lives;
+    run.stomps = 0;
+    run.bonus = 0;
     restartAfterPop = false;
     finished = false;
     springPulses.clear();
@@ -139,8 +141,15 @@ export function createSession({ level, tasks, modal, hud, pop, input, audio, ski
         // Прыгнул врагу на голову: отскок вверх, враг лопается. Жизнь не теряем.
         player.velocityY = -STOMP_BOUNCE;
         player.isJumping = false; // отскок фиксированный, кнопкой не подрезается
+        run.stomps += 1;
         pop.burst(event.enemy.x + event.enemy.width / 2, event.enemy.y + event.enemy.height / 2);
         audio.play('stomp');
+        break;
+
+      case 'goal':
+        // Коснулся финиш-флага — уровень пройден. Бонус за высоту касания.
+        run.bonus = event.bonus;
+        complete();
         break;
 
       case 'door-opened':
@@ -163,8 +172,10 @@ export function createSession({ level, tasks, modal, hud, pop, input, audio, ski
     const coinsMax = entities.coins.length;
     // Третья звезда: все сундуки уровня открыты и ни один не потребовал разбора.
     const cleanTasks = entities.chests.every((chest) => chest.opened) && !usedSolution;
+    // Очки за забег: монеты + топанья + бонус за высоту флага.
+    const score = run.coins * 10 + run.stomps * 50 + run.bonus;
 
-    onComplete({ coins: run.coins, coinsMax, timeMs: run.elapsedMs, cleanTasks });
+    onComplete({ coins: run.coins, coinsMax, timeMs: run.elapsedMs, cleanTasks, score, bonus: run.bonus });
   }
 
   function update(dt) {

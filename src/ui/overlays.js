@@ -49,7 +49,12 @@ export function createOverlays({ mount, on }) {
         el('dt', { text: t('complete.coins') }),
         el('dd', { text: `${result.coins} / ${result.coinsMax}` }),
         el('dt', { text: t('complete.time') }),
-        el('dd', { text: formatTime(result.timeMs) })),
+        el('dd', { text: formatTime(result.timeMs) }),
+        el('dt', { text: t('complete.score') }),
+        el('dd', { text: String(result.score ?? 0) }),
+        ...(result.bonus > 0
+          ? [el('dt', { text: t('complete.bonus') }), el('dd', { text: '+' + result.bonus })]
+          : [])),
       el('div', { class: 'screen__actions' },
         result.hasNext
           ? button('screen__button screen__button--primary', t('complete.next'), on.next)

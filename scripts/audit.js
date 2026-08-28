@@ -73,6 +73,10 @@ export function auditLevel(level) {
     problems.push(`до двери-выхода на [${exit.at}] не добраться`);
   }
 
+  if (level.flag && !canReach(spots, level.flag.at)) {
+    problems.push(`до финиш-флага на [${level.flag.at}] не добраться`);
+  }
+
   const traps = [...spots.values()].filter((spot) => spot.exits === 0);
   for (const trap of traps.slice(0, 3)) {
     problems.push(`капкан: с площадки [колонка ${Math.round(trap.x / TILE)}, y ${Math.round(trap.y)}] не уйти`);

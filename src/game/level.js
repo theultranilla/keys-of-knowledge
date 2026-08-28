@@ -98,6 +98,7 @@ export function parseLevel(data, id = data?.id) {
     hazards: data.hazards ?? [],
     cannons: data.cannons ?? [], // пушки: периодически выпускают снаряды
     enemies: data.enemies ?? [], // ходячие/летающие враги: касание убивает, топанье убивает их
+    flag: data.flag ?? null,     // финиш-флаг: коснулся — уровень пройден (альтернатива двери-выходу)
 
     tileAt(column, line) {
       const row = rows[line];
@@ -120,11 +121,12 @@ export function parseLevel(data, id = data?.id) {
   checkHazards(level, where);
   checkCannons(level, where);
   checkEnemies(level, where);
+  checkFlag(level, where);
 
-  // Без двери-выхода уровень нельзя закончить, и это молчаливый тупик —
-  // ловим его при загрузке.
-  if (level.doors.length > 0 && !level.doors.some((door) => door.exit)) {
-    throw new Error(`${where}: ни одна дверь не помечена "exit": true — уровень нечем закончить`);
+  // Уровень должен быть чем-то заканчиваться: дверью-выходом или флагом. Без
+  // этого он молчаливый тупик — ловим при загрузке.
+  if (!level.flag && !level.doors.some((door) => door.exit)) {
+    throw new Error(`${where}: нет ни двери "exit": true, ни флага — уровень нечем закончить`);
   }
 
   // Ключ, которого не выдаёт ни один сундук, — тоже тупик.
@@ -238,4 +240,15 @@ function checkEnemies(level, where) {
       throw new Error(`${where}: enemies[${index}].kind должен быть "walker" или "flyer"`);
     }
   });
+}
+
+function checkFlag(level, where) {
+  if (!level.flag) return;
+  const at = level.flag.at;
+  if (!Array.isArray(at) || at.length !== 2) {
+    throw new Error(`${where}: flag.at должен быть парой [колонка, строка]`);
+  }
+  if (level.flag.height != null && !(level.flag.height > 0)) {
+    throw new Error(`${where}: flag.height должен быть больше нуля`);
+  }
 }

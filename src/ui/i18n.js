@@ -74,6 +74,8 @@ const ru = {
   'complete.title': 'Уровень пройден!',
   'complete.coins': 'Монеты',
   'complete.time': 'Время',
+  'complete.score': 'Очки',
+  'complete.bonus': 'Бонус за флаг',
   'complete.next': 'Следующий уровень',
   'complete.retry': 'Пройти заново',
   'complete.toMenu': 'В меню',

@@ -13,6 +13,7 @@ export function drawProps(ctx, entities, time) {
   if (entities.cannons) for (const cannon of entities.cannons) drawCannon(ctx, cannon);
   if (entities.projectiles) for (const projectile of entities.projectiles) drawProjectile(ctx, projectile, time);
   if (entities.enemies) for (const enemy of entities.enemies) drawEnemy(ctx, enemy, time);
+  if (entities.flag) drawFlag(ctx, entities.flag, time);
   for (const checkpoint of entities.checkpoints) drawCheckpoint(ctx, checkpoint);
   for (const chest of entities.chests) drawChest(ctx, chest);
   for (const door of entities.doors) drawDoor(ctx, door);
@@ -192,6 +193,34 @@ function drawHazard(ctx, hazard, time) {
   ctx.fillStyle = 'rgba(255, 235, 230, 0.85)';
   ctx.beginPath();
   ctx.arc(cx, cy, radius * 0.28, 0, Math.PI * 2);
+  ctx.fill();
+}
+
+// Финиш-флаг: столб с шариком-навершием и трепещущим флажком. Пройденный —
+// флаг спускается к основанию (бирюзовый), как в классических платформерах.
+function drawFlag(ctx, flag, time) {
+  const poleX = flag.x + flag.width / 2;
+  // столб
+  ctx.strokeStyle = PALETTE.chalk;
+  ctx.lineWidth = 4;
+  ctx.beginPath();
+  ctx.moveTo(poleX, flag.topY);
+  ctx.lineTo(poleX, flag.baseY);
+  ctx.stroke();
+  // навершие
+  ctx.fillStyle = flag.reached ? PALETTE.teal : PALETTE.amber;
+  ctx.beginPath();
+  ctx.arc(poleX, flag.topY, 6, 0, Math.PI * 2);
+  ctx.fill();
+  // полотнище: наверху пока не пройден, у основания — когда пройден
+  const flagY = flag.reached ? flag.baseY - 26 : flag.topY + 6;
+  const wave = prefersReducedMotion() ? 0 : Math.sin(time * 4) * 3;
+  ctx.fillStyle = flag.reached ? PALETTE.teal : PALETTE.coral;
+  ctx.beginPath();
+  ctx.moveTo(poleX, flagY);
+  ctx.lineTo(poleX + 26 + wave, flagY + 8);
+  ctx.lineTo(poleX, flagY + 18);
+  ctx.closePath();
   ctx.fill();
 }
 
