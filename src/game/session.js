@@ -1,6 +1,6 @@
 import { createCamera } from '../engine/camera.js';
 import { prefersReducedMotion } from '../engine/motion.js';
-import { TILE, SPRING_PULSE_TIME } from '../engine/constants.js';
+import { TILE, SPRING_PULSE_TIME, STOMP_BOUNCE } from '../engine/constants.js';
 import { createPlayer, updatePlayer, startPop, respawn } from './player.js';
 import { createEntities } from './entities.js';
 
@@ -133,6 +133,14 @@ export function createSession({ level, tasks, modal, hud, pop, input, audio, ski
         startPop(player);
         audio.play('hurt');
         restartAfterPop = loseLife();
+        break;
+
+      case 'stomp':
+        // Прыгнул врагу на голову: отскок вверх, враг лопается. Жизнь не теряем.
+        player.velocityY = -STOMP_BOUNCE;
+        player.isJumping = false; // отскок фиксированный, кнопкой не подрезается
+        pop.burst(event.enemy.x + event.enemy.width / 2, event.enemy.y + event.enemy.height / 2);
+        audio.play('stomp');
         break;
 
       case 'door-opened':

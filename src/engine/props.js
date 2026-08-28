@@ -12,6 +12,7 @@ export function drawProps(ctx, entities, time) {
   for (const hazard of entities.hazards) drawHazard(ctx, hazard, time);
   if (entities.cannons) for (const cannon of entities.cannons) drawCannon(ctx, cannon);
   if (entities.projectiles) for (const projectile of entities.projectiles) drawProjectile(ctx, projectile, time);
+  if (entities.enemies) for (const enemy of entities.enemies) drawEnemy(ctx, enemy, time);
   for (const checkpoint of entities.checkpoints) drawCheckpoint(ctx, checkpoint);
   for (const chest of entities.chests) drawChest(ctx, chest);
   for (const door of entities.doors) drawDoor(ctx, door);
@@ -34,24 +35,69 @@ function drawCannon(ctx, cannon) {
   ctx.fillRect(cannon.dir > 0 ? cx : cx - bl, cy - 4, bl, 8);
 }
 
-// Снаряд — коралловый (цвет опасности): мяч кругом, пуля вытянутой капсулой.
+// Снаряд — коралловый (цвет опасности): мяч кругом, пуля капсулой по ходу полёта
+// (в т.ч. вертикально — для пушек, стреляющих вверх/вниз).
 function drawProjectile(ctx, p, time) {
   const cx = p.x + p.width / 2, cy = p.y + p.height / 2, r = p.width / 2 + 2;
   ctx.fillStyle = PALETTE.coral;
   if (p.kind === 'bullet') {
-    roundedRect(ctx, cx - r * 1.3, cy - r * 0.7, r * 2.6, r * 1.4, r * 0.7);
-    ctx.fill();
-    ctx.fillStyle = 'rgba(255,235,230,0.85)'; // носик по ходу движения
-    ctx.beginPath();
-    ctx.arc(cx + (p.vx > 0 ? r : -r), cy, r * 0.4, 0, Math.PI * 2);
-    ctx.fill();
+    if (Math.abs(p.vy) > Math.abs(p.vx)) { // летит вертикально
+      roundedRect(ctx, cx - r * 0.7, cy - r * 1.3, r * 1.4, r * 2.6, r * 0.7);
+      ctx.fill();
+      ctx.fillStyle = 'rgba(255,235,230,0.85)';
+      ctx.beginPath(); ctx.arc(cx, cy + (p.vy > 0 ? r : -r), r * 0.4, 0, Math.PI * 2); ctx.fill();
+    } else {
+      roundedRect(ctx, cx - r * 1.3, cy - r * 0.7, r * 2.6, r * 1.4, r * 0.7);
+      ctx.fill();
+      ctx.fillStyle = 'rgba(255,235,230,0.85)'; // носик по ходу движения
+      ctx.beginPath(); ctx.arc(cx + (p.vx > 0 ? r : -r), cy, r * 0.4, 0, Math.PI * 2); ctx.fill();
+    }
   } else {
     ctx.beginPath(); ctx.arc(cx, cy, r, 0, Math.PI * 2); ctx.fill();
     ctx.strokeStyle = 'rgba(20, 27, 52, 0.5)'; ctx.lineWidth = 1.5; ctx.stroke();
-    // блик, чтобы читался как объёмный мячик
-    ctx.fillStyle = 'rgba(255,235,230,0.7)';
+    ctx.fillStyle = 'rgba(255,235,230,0.7)'; // блик — объёмный мячик
     ctx.beginPath(); ctx.arc(cx - r * 0.3, cy - r * 0.3, r * 0.28, 0, Math.PI * 2); ctx.fill();
   }
+}
+
+// Враг: коричневый ходок / фиолетовый летун с крыльями, хмурые глаза по ходу
+// движения. Топнутый — плоский «блин» на пару кадров.
+function drawEnemy(ctx, e, time) {
+  const cx = e.x + e.width / 2;
+  if (e.dead) {
+    ctx.fillStyle = '#7a4a30';
+    roundedRect(ctx, e.x - 2, e.y + e.height * 0.62, e.width + 4, e.height * 0.38, 6);
+    ctx.fill();
+    return;
+  }
+  if (e.kind === 'flyer') { // трепещущие крылья
+    const flap = prefersReducedMotion() ? 0 : Math.sin(time * 10) * 3;
+    ctx.fillStyle = 'rgba(232,236,244,0.75)';
+    ctx.beginPath(); ctx.ellipse(e.x - 1, e.y + e.height * 0.4 + flap, 7, 4, 0, 0, Math.PI * 2); ctx.fill();
+    ctx.beginPath(); ctx.ellipse(e.x + e.width + 1, e.y + e.height * 0.4 - flap, 7, 4, 0, 0, Math.PI * 2); ctx.fill();
+  }
+  ctx.fillStyle = e.kind === 'flyer' ? '#9e73ee' : '#8a5a3b';
+  roundedRect(ctx, e.x, e.y, e.width, e.height, 7);
+  ctx.fill();
+  ctx.strokeStyle = 'rgba(20,27,52,0.5)';
+  ctx.lineWidth = 1.5;
+  roundedRect(ctx, e.x, e.y, e.width, e.height, 7);
+  ctx.stroke();
+
+  const look = e.deltaX >= 0 ? 1 : -1;
+  const eyeY = e.y + e.height * 0.3, ex1 = cx - 6, ex2 = cx + 6;
+  ctx.fillStyle = '#fff';
+  ctx.fillRect(ex1 - 3, eyeY, 6, 7);
+  ctx.fillRect(ex2 - 3, eyeY, 6, 7);
+  ctx.fillStyle = '#141b34';
+  ctx.fillRect(ex1 - 1 + look, eyeY + 2, 3, 4);
+  ctx.fillRect(ex2 - 1 + look, eyeY + 2, 3, 4);
+  ctx.strokeStyle = '#141b34';
+  ctx.lineWidth = 2;
+  ctx.beginPath(); // хмурые брови
+  ctx.moveTo(ex1 - 4, eyeY - 2); ctx.lineTo(ex1 + 3, eyeY);
+  ctx.moveTo(ex2 - 3, eyeY); ctx.lineTo(ex2 + 4, eyeY - 2);
+  ctx.stroke();
 }
 
 function drawPlatform(ctx, platform) {

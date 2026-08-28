@@ -36,6 +36,12 @@ const PLATFORM_HEIGHT = 12;
 // а не пустым углом коробки.
 const PROJECTILE_HIT = 14;
 const CANNON_SIZE = 22;
+// Враг: хитбокс. Топанье засчитывается, если ступни игрока вошли в верхнюю
+// STOMP_MARGIN врага при падении — иначе это касание сбоку и смерть.
+const ENEMY_W = 26;
+const ENEMY_H = 24;
+const STOMP_MARGIN = 14;
+const ENEMY_DEATH_TIME = 0.22; // сколько «блин» лежит после топанья, прежде чем исчезнуть
 
 export function createEntities(level) {
   const coins = [];
@@ -193,7 +199,8 @@ export function createEntities(level) {
     y: entry.at[1] * TILE + (TILE - CANNON_SIZE) / 2,
     width: CANNON_SIZE,
     height: CANNON_SIZE,
-    dir: entry.dir,
+    dir: entry.dir ?? 0,
+    diry: entry.diry ?? 0, // 0 — горизонтальная, -1 вверх, 1 вниз
     speed: entry.speed,
     interval: entry.interval,
     kind: entry.kind === 'bullet' ? 'bullet' : 'ball',
@@ -202,6 +209,23 @@ export function createEntities(level) {
     timer: (((((entry.phase ?? 0) % 1) + 1) % 1)) * entry.interval
   }));
   const projectiles = [];
+
+  // Враги патрулируют между from и to тем же движком, что платформы (movePlatform).
+  // walker стоит на полу своей строки, flyer парит по центру тайла (from→to может
+  // быть и диагональю). Не твёрдые: игрок проходит сквозь, но касание решает всё.
+  const enemies = (level.enemies ?? []).map((entry) => {
+    const kind = entry.kind === 'flyer' ? 'flyer' : 'walker';
+    const offY = kind === 'walker' ? TILE - ENEMY_H : (TILE - ENEMY_H) / 2;
+    const fromX = entry.from[0] * TILE + (TILE - ENEMY_W) / 2;
+    const toX = entry.to[0] * TILE + (TILE - ENEMY_W) / 2;
+    const fromY = entry.from[1] * TILE + offY;
+    const toY = entry.to[1] * TILE + offY;
+    return {
+      kind, x: fromX, y: fromY, previousX: fromX, previousY: fromY, deltaX: 0, deltaY: 0,
+      width: ENEMY_W, height: ENEMY_H, fromX, fromY, toX, toY, speed: entry.speed, forward: true,
+      dead: false, deadTimer: 0
+    };
+  });
 
   // Запертая дверь перегораживает проход. Открытая перестаёт быть препятствием,
   // поэтому уходит из этого списка.
@@ -223,14 +247,22 @@ export function createEntities(level) {
         projectiles.push({
           x: cx - PROJECTILE_HIT / 2, y: cy - PROJECTILE_HIT / 2,
           width: PROJECTILE_HIT, height: PROJECTILE_HIT,
-          vx: cannon.dir * cannon.speed, kind: cannon.kind
+          vx: cannon.dir * cannon.speed, vy: cannon.diry * cannon.speed, kind: cannon.kind
         });
       }
     }
     for (let i = projectiles.length - 1; i >= 0; i--) {
       const p = projectiles[i];
       p.x += p.vx * dt;
-      if (p.x < -TILE || p.x > level.widthPx + TILE) projectiles.splice(i, 1); // улетел за край
+      p.y += p.vy * dt;
+      if (p.x < -TILE || p.x > level.widthPx + TILE || p.y < -TILE || p.y > level.heightPx + TILE) {
+        projectiles.splice(i, 1); // улетел за край
+      }
+    }
+    for (let i = enemies.length - 1; i >= 0; i--) {
+      const enemy = enemies[i];
+      if (enemy.dead) { enemy.deadTimer -= dt; if (enemy.deadTimer <= 0) enemies.splice(i, 1); continue; }
+      movePlatform(enemy, dt);
     }
     for (const coin of coins) {
       coin.phase = (coin.phase + dt * 0.6) % 1;
@@ -275,7 +307,26 @@ export function createEntities(level) {
       for (const projectile of projectiles) {
         if (!overlaps(player, projectile)) continue;
         events.push({ type: 'spike', spike: projectile }); // снаряд убивает как шип
+        died = true;
         break;
+      }
+    }
+    // Враг: прыжок на голову (падаешь И ступни вошли в верх врага) убивает его с
+    // отскоком; любое другое касание убивает игрока. Топанье приоритетнее.
+    if (!died) {
+      let stomped = null, sideHit = null;
+      for (const enemy of enemies) {
+        if (enemy.dead || !overlaps(player, enemy)) continue;
+        const fromAbove = player.velocityY > 0 && (player.y + player.height) - enemy.y < STOMP_MARGIN;
+        if (fromAbove) { if (!stomped) stomped = enemy; }
+        else if (!sideHit) sideHit = enemy;
+      }
+      if (stomped) {
+        stomped.dead = true;
+        stomped.deadTimer = ENEMY_DEATH_TIME;
+        events.push({ type: 'stomp', enemy: stomped });
+      } else if (sideHit) {
+        events.push({ type: 'spike', spike: sideHit });
       }
     }
 
@@ -310,6 +361,7 @@ export function createEntities(level) {
     hazards,
     cannons,
     projectiles,
+    enemies,
     checkpoints,
     chests,
     doors,

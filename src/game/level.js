@@ -96,7 +96,8 @@ export function parseLevel(data, id = data?.id) {
     doors: data.doors ?? [],
     platforms: data.platforms ?? [],
     hazards: data.hazards ?? [],
-    cannons: data.cannons ?? [], // боковые пушки: периодически выпускают снаряды
+    cannons: data.cannons ?? [], // пушки: периодически выпускают снаряды
+    enemies: data.enemies ?? [], // ходячие/летающие враги: касание убивает, топанье убивает их
 
     tileAt(column, line) {
       const row = rows[line];
@@ -118,6 +119,7 @@ export function parseLevel(data, id = data?.id) {
   checkPlatforms(level, where);
   checkHazards(level, where);
   checkCannons(level, where);
+  checkEnemies(level, where);
 
   // Без двери-выхода уровень нельзя закончить, и это молчаливый тупик —
   // ловим его при загрузке.
@@ -206,14 +208,34 @@ function checkCannons(level, where) {
     if (!Array.isArray(at) || at.length !== 2) {
       throw new Error(`${where}: cannons[${index}].at должен быть парой [колонка, строка]`);
     }
-    if (cannon.dir !== -1 && cannon.dir !== 1) {
-      throw new Error(`${where}: cannons[${index}].dir должен быть -1 (влево) или 1 (вправо)`);
+    const dir = cannon.dir ?? 0, diry = cannon.diry ?? 0;
+    if (![-1, 0, 1].includes(dir) || ![-1, 0, 1].includes(diry) || (dir === 0 && diry === 0)) {
+      throw new Error(`${where}: cannons[${index}] — dir и diry по горизонтали/вертикали из {-1,0,1}, и не оба нуля`);
     }
     if (!(cannon.speed > 0)) {
       throw new Error(`${where}: cannons[${index}].speed должен быть больше нуля`);
     }
     if (!(cannon.interval > 0)) {
       throw new Error(`${where}: cannons[${index}].interval должен быть больше нуля`);
+    }
+  });
+}
+
+// Враги: патрулируют между from и to. Касание сбоку/снизу убивает игрока, прыжок
+// на голову убивает врага. Здесь только проверка полей.
+function checkEnemies(level, where) {
+  level.enemies.forEach((enemy, index) => {
+    for (const field of ['from', 'to']) {
+      const point = enemy?.[field];
+      if (!Array.isArray(point) || point.length !== 2) {
+        throw new Error(`${where}: enemies[${index}].${field} должен быть парой [колонка, строка]`);
+      }
+    }
+    if (!(enemy.speed > 0)) {
+      throw new Error(`${where}: enemies[${index}].speed должен быть больше нуля`);
+    }
+    if (enemy.kind != null && enemy.kind !== 'walker' && enemy.kind !== 'flyer') {
+      throw new Error(`${where}: enemies[${index}].kind должен быть "walker" или "flyer"`);
     }
   });
 }

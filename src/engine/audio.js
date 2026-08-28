@@ -59,6 +59,11 @@ export function createAudio(settings = { sound: true }) {
     // сразу отличало отскок от него.
     spring: () => tone({ from: 200, to: 860, type: 'triangle', duration: 0.22, gain: 0.24 }),
     land: () => tone({ from: 180, to: 120, duration: 0.07, gain: 0.12 }),
+    // Топнул врага: короткий шлепок вниз + бодрый подскок вверх.
+    stomp: () => {
+      tone({ from: 180, to: 90, type: 'square', duration: 0.08, gain: 0.14 });
+      tone({ from: 420, to: 720, type: 'triangle', duration: 0.1, gain: 0.08, delay: 0.03 });
+    },
     coin: () => {
       tone({ from: NOTE.e5, duration: 0.07, gain: 0.2, type: 'square' });
       tone({ from: NOTE.g5, duration: 0.09, gain: 0.18, type: 'square', delay: 0.06 });
