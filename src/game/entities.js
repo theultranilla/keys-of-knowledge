@@ -47,10 +47,14 @@ const ENEMY_DEATH_TIME = 0.22; // сколько «блин» лежит пос�
 const FLAG_POLE_W = 12;
 const FLAG_MAX_BONUS = 500;
 
+const POWERUP_SIZE = 20;
+
 export function createEntities(level) {
   const coins = [];
   const spikes = [];
   const checkpoints = [];
+  const powerups = []; // звезда/щит/крылья — собираются касанием, как монеты
+  const crumbles = []; // рушащиеся тайлы: твёрдые, пока на них не встанешь
 
   for (let line = 0; line < level.lines; line++) {
     for (let column = 0; column < level.columns; column++) {
@@ -95,6 +99,23 @@ export function createEntities(level) {
             height: FLAG_HEIGHT,
             active: false
           });
+          break;
+        case 'star':
+        case 'shield':
+        case 'wing':
+          powerups.push({
+            x: x + (TILE - POWERUP_SIZE) / 2,
+            y: y + (TILE - POWERUP_SIZE) / 2,
+            width: POWERUP_SIZE,
+            height: POWERUP_SIZE,
+            kind: level.tileAt(column, line),
+            phase: (column * 5 + line * 11) % 100 / 100,
+            taken: false
+          });
+          break;
+        case 'crumble':
+          // Твёрдый блок с состоянием: solid → shaking (на нём стоят) → gone.
+          crumbles.push({ x, y, width: TILE, height: TILE, deltaX: 0, deltaY: 0, crumble: true, state: 'solid', timer: 0 });
           break;
         default:
           break;
@@ -236,8 +257,8 @@ export function createEntities(level) {
   const flag = level.flag ? buildFlag(level.flag) : null;
 
   // Запертая дверь перегораживает проход. Открытая перестаёт быть препятствием,
-  // поэтому уходит из этого списка.
-  const solid = [...platforms, ...doors];
+  // поэтому уходит из этого списка. Рушащийся тайл тоже твёрдый, пока не осыпался.
+  const solid = [...platforms, ...doors, ...crumbles];
 
   function update(dt) {
     for (const platform of platforms) {
@@ -272,6 +293,15 @@ export function createEntities(level) {
       if (enemy.dead) { enemy.deadTimer -= dt; if (enemy.deadTimer <= 0) enemies.splice(i, 1); continue; }
       movePlatform(enemy, dt);
     }
+    for (const crumble of crumbles) {
+      if (crumble.state !== 'shaking') continue;
+      crumble.timer -= dt;
+      if (crumble.timer <= 0) { // осыпался — убираем из твёрдых, игрок проваливается
+        crumble.state = 'gone';
+        const idx = solid.indexOf(crumble);
+        if (idx !== -1) solid.splice(idx, 1);
+      }
+    }
     for (const coin of coins) {
       coin.phase = (coin.phase + dt * 0.6) % 1;
     }
@@ -292,6 +322,12 @@ export function createEntities(level) {
       if (checkpoint.active || !overlaps(player, checkpoint)) continue;
       checkpoint.active = true;
       events.push({ type: 'checkpoint', checkpoint });
+    }
+
+    for (const pu of powerups) {
+      if (pu.taken || !overlaps(player, pu)) continue;
+      pu.taken = true;
+      events.push({ type: 'powerup', kind: pu.kind });
     }
 
     // Шип и комета убивают одинаково — событие одно и то же. Одной смерти за шаг
@@ -380,6 +416,8 @@ export function createEntities(level) {
     projectiles,
     enemies,
     flag,
+    powerups,
+    crumbles,
     checkpoints,
     chests,
     doors,

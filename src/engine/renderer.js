@@ -2,6 +2,7 @@ import { createBackground } from './background.js';
 import { drawTiles } from './tiles.js';
 import { drawProps } from './props.js';
 import { drawCharacter } from './character.js';
+import { prefersReducedMotion } from './motion.js';
 import { VIEW_WIDTH, VIEW_HEIGHT, PALETTE } from './constants.js';
 import { DEFAULT_SKIN } from '../game/skins.js';
 
@@ -59,7 +60,10 @@ export function createRenderer(canvas) {
     drawTiles(ctx, map, cameraX, cameraY, time, springPulses);
     drawProps(ctx, entities, time);
     // Лопнувшего игрока не рисуем — вместо него на экране осколки.
-    if (player.popTimer <= 0) drawPlayer(player, alpha, skin);
+    if (player.popTimer <= 0) {
+      if (player.invincibleTimer > 0) drawInvincibleAura(player, alpha, time);
+      drawPlayer(player, alpha, skin);
+    }
     drawPop(pop);
     ctx.restore();
 
@@ -91,6 +95,22 @@ export function createRenderer(canvas) {
       ctx.fillRect(-shard.size / 2, -shard.size / 2, shard.size, shard.size);
       ctx.restore();
     }
+    ctx.globalAlpha = 1;
+  }
+
+  // Под звездой герой в радужном пульсирующем ореоле (в спокойном режиме —
+  // ровное золотое кольцо без мельтешения цветов).
+  function drawInvincibleAura(player, alpha, time) {
+    const x = lerp(player.previousX, player.x, alpha) + player.width / 2;
+    const y = lerp(player.previousY, player.y, alpha) + player.height / 2;
+    const calm = prefersReducedMotion();
+    const r = Math.max(player.width, player.height) * 0.75 + (calm ? 0 : Math.sin(time * 12) * 3);
+    ctx.strokeStyle = calm ? PALETTE.amber : `hsl(${Math.floor(time * 300) % 360}, 85%, 65%)`;
+    ctx.globalAlpha = 0.85;
+    ctx.lineWidth = 3;
+    ctx.beginPath();
+    ctx.arc(x, y, r, 0, Math.PI * 2);
+    ctx.stroke();
     ctx.globalAlpha = 1;
   }
 

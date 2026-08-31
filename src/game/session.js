@@ -1,6 +1,6 @@
 import { createCamera } from '../engine/camera.js';
 import { prefersReducedMotion } from '../engine/motion.js';
-import { TILE, SPRING_PULSE_TIME, STOMP_BOUNCE } from '../engine/constants.js';
+import { TILE, SPRING_PULSE_TIME, STOMP_BOUNCE, STAR_TIME, WING_TIME, CRUMBLE_SHAKE } from '../engine/constants.js';
 import { createPlayer, updatePlayer, startPop, respawn } from './player.js';
 import { createEntities } from './entities.js';
 
@@ -129,12 +129,37 @@ export function createSession({ level, tasks, modal, hud, pop, input, audio, ski
         audio.play('checkpoint');
         break;
 
-      case 'spike':
+      case 'spike': {
         if (player.popTimer > 0) break;
+        // Звезда: неуязвим. Если задел врага — топчем его на ходу.
+        if (player.invincibleTimer > 0) {
+          const e = event.spike;
+          if (e && (e.kind === 'walker' || e.kind === 'flyer') && !e.dead) {
+            e.dead = true; e.deadTimer = 0.22;
+            pop.burst(e.x + e.width / 2, e.y + e.height / 2);
+            audio.play('stomp');
+          }
+          break;
+        }
+        // Щит гасит один удар и даёт короткую неуязвимость, чтобы не убило тут же.
+        if (player.hasShield) {
+          player.hasShield = false;
+          player.invincibleTimer = Math.max(player.invincibleTimer, 1);
+          audio.play('hurt');
+          break;
+        }
         pop.burst(player.x + player.width / 2, player.y + player.height / 2);
         startPop(player);
         audio.play('hurt');
         restartAfterPop = loseLife();
+        break;
+      }
+
+      case 'powerup':
+        if (event.kind === 'star') player.invincibleTimer = STAR_TIME;
+        else if (event.kind === 'shield') player.hasShield = true;
+        else if (event.kind === 'wing') { player.doubleJumpTimer = WING_TIME; player.airJumpUsed = false; }
+        audio.play('key');
         break;
 
       case 'stomp':
@@ -217,6 +242,15 @@ export function createSession({ level, tasks, modal, hud, pop, input, audio, ski
     }
 
     if (input.consumePress('interact')) openChest();
+
+    // Встал на рушащийся тайл — он начинает дрожать и скоро осыплется.
+    const ground = player.ridingPlatform;
+    if (ground && ground.crumble && ground.state === 'solid') {
+      ground.state = 'shaking';
+      ground.timer = CRUMBLE_SHAKE;
+      audio.play('land');
+    }
+
     for (const event of entities.collide(player, run.keys)) handleEvent(event);
 
     camera.update(player, dt);

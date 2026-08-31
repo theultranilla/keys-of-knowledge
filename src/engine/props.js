@@ -12,8 +12,10 @@ export function drawProps(ctx, entities, time) {
   for (const hazard of entities.hazards) drawHazard(ctx, hazard, time);
   if (entities.cannons) for (const cannon of entities.cannons) drawCannon(ctx, cannon);
   if (entities.projectiles) for (const projectile of entities.projectiles) drawProjectile(ctx, projectile, time);
+  if (entities.crumbles) for (const c of entities.crumbles) drawCrumble(ctx, c);
   if (entities.enemies) for (const enemy of entities.enemies) drawEnemy(ctx, enemy, time);
   if (entities.flag) drawFlag(ctx, entities.flag, time);
+  if (entities.powerups) for (const pu of entities.powerups) drawPowerup(ctx, pu, time);
   for (const checkpoint of entities.checkpoints) drawCheckpoint(ctx, checkpoint);
   for (const chest of entities.chests) drawChest(ctx, chest);
   for (const door of entities.doors) drawDoor(ctx, door);
@@ -222,6 +224,77 @@ function drawFlag(ctx, flag, time) {
   ctx.lineTo(poleX, flagY + 18);
   ctx.closePath();
   ctx.fill();
+}
+
+// Рушащийся тайл: спокойный — как призрачный блок с трещиной; задрожал — жёлтый
+// и трясётся; осыпался — не рисуется.
+function drawCrumble(ctx, c) {
+  if (c.state === 'gone') return;
+  const shaking = c.state === 'shaking';
+  const jit = shaking && !prefersReducedMotion() ? (Math.random() - 0.5) * 2 : 0;
+  const x = c.x + jit, y = c.y + jit;
+  ctx.fillStyle = shaking ? 'rgba(242,168,59,0.32)' : 'rgba(232,236,244,0.14)';
+  roundedRect(ctx, x, y, c.width, c.height, 4);
+  ctx.fill();
+  ctx.strokeStyle = shaking ? PALETTE.amber : PALETTE.chalk;
+  ctx.globalAlpha = 0.7;
+  ctx.lineWidth = 2;
+  roundedRect(ctx, x, y, c.width, c.height, 4);
+  ctx.stroke();
+  ctx.beginPath(); // трещина
+  ctx.moveTo(x + c.width * 0.4, y);
+  ctx.lineTo(x + c.width * 0.55, y + c.height * 0.5);
+  ctx.lineTo(x + c.width * 0.45, y + c.height);
+  ctx.stroke();
+  ctx.globalAlpha = 1;
+}
+
+// Усиление: звезда (амбер), щит (бирюза), крылья (мел). Покачиваются, как монеты.
+function drawPowerup(ctx, pu, time) {
+  if (pu.taken) return;
+  const cx = pu.x + pu.width / 2;
+  const cy = pu.y + pu.height / 2 + (prefersReducedMotion() ? 0 : Math.sin((time + pu.phase) * Math.PI * 2) * 2.5);
+  const r = pu.width / 2;
+  if (pu.kind === 'star') {
+    ctx.fillStyle = PALETTE.amber;
+    starPath(ctx, cx, cy, r, r * 0.45, 5);
+    ctx.fill();
+    ctx.strokeStyle = '#141b34'; ctx.lineWidth = 1.5; ctx.stroke();
+  } else if (pu.kind === 'shield') {
+    ctx.fillStyle = PALETTE.teal;
+    ctx.beginPath();
+    ctx.moveTo(cx, cy - r);
+    ctx.lineTo(cx + r, cy - r * 0.5);
+    ctx.lineTo(cx + r * 0.8, cy + r * 0.6);
+    ctx.lineTo(cx, cy + r);
+    ctx.lineTo(cx - r * 0.8, cy + r * 0.6);
+    ctx.lineTo(cx - r, cy - r * 0.5);
+    ctx.closePath();
+    ctx.fill();
+    ctx.strokeStyle = '#0c1226'; ctx.lineWidth = 2; // галочка
+    ctx.beginPath();
+    ctx.moveTo(cx - r * 0.35, cy);
+    ctx.lineTo(cx - r * 0.05, cy + r * 0.35);
+    ctx.lineTo(cx + r * 0.45, cy - r * 0.3);
+    ctx.stroke();
+  } else { // wing
+    ctx.fillStyle = PALETTE.chalk;
+    ctx.beginPath(); ctx.ellipse(cx - r * 0.45, cy, r * 0.55, r * 0.35, -0.5, 0, Math.PI * 2); ctx.fill();
+    ctx.beginPath(); ctx.ellipse(cx + r * 0.45, cy, r * 0.55, r * 0.35, 0.5, 0, Math.PI * 2); ctx.fill();
+    ctx.fillStyle = PALETTE.amber;
+    ctx.beginPath(); ctx.arc(cx, cy, r * 0.32, 0, Math.PI * 2); ctx.fill();
+  }
+}
+
+function starPath(ctx, cx, cy, outer, inner, points) {
+  ctx.beginPath();
+  for (let i = 0; i < points * 2; i++) {
+    const a = i * Math.PI / points - Math.PI / 2;
+    const rad = i % 2 === 0 ? outer : inner;
+    const px = cx + Math.cos(a) * rad, py = cy + Math.sin(a) * rad;
+    if (i === 0) ctx.moveTo(px, py); else ctx.lineTo(px, py);
+  }
+  ctx.closePath();
 }
 
 function drawCheckpoint(ctx, checkpoint) {

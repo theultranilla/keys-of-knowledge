@@ -10,6 +10,7 @@ import {
   AIR_CONTROL,
   GRAVITY,
   JUMP_SPEED,
+  DOUBLE_JUMP_SPEED,
   FALL_GRAVITY_MULTIPLIER,
   JUMP_CUT_MULTIPLIER,
   MAX_FALL_SPEED,
@@ -50,7 +51,12 @@ export function createPlayer(spawn) {
     // Платформа, на которой игрок стоит прямо сейчас. Пока она есть — он едет.
     ridingPlatform: null,
     // Считаем падения: на Этапе 3 из этого вырастут жизни и HUD.
-    falls: 0
+    falls: 0,
+    // --- Усиления ---
+    invincibleTimer: 0, // >0 — звезда: неуязвим и топчет всё
+    doubleJumpTimer: 0, // >0 — крылья: доступен второй прыжок в воздухе
+    airJumpUsed: false, // второй прыжок уже потрачен в этом полёте
+    hasShield: false    // щит поглотит один удар вместо жизни
   };
 }
 
@@ -87,7 +93,7 @@ export function updatePlayer(player, input, world, dt) {
   const contacts = moveAndCollide(player, world, dt);
   player.onGround = contacts.below;
   player.ridingPlatform = contacts.ground;
-  if (contacts.below) player.isJumping = false;
+  if (contacts.below) { player.isJumping = false; player.airJumpUsed = false; }
 
   // Приземлился сверху на батут — фиксированный отскок вверх. Проверяем тайл под
   // ногами, а не коробку: батут — это тайл сетки, а не движущаяся платформа.
@@ -117,6 +123,8 @@ function standingOnSpring(player, map) {
 function updateTimers(player, input, dt) {
   // На земле окно всё время полное, в воздухе — тает.
   player.coyoteTimer = player.onGround ? COYOTE_TIME : Math.max(0, player.coyoteTimer - dt);
+  player.invincibleTimer = Math.max(0, player.invincibleTimer - dt);
+  player.doubleJumpTimer = Math.max(0, player.doubleJumpTimer - dt);
 
   if (input.consumePress('jump')) {
     player.jumpBufferTimer = JUMP_BUFFER_TIME;
@@ -146,17 +154,29 @@ function applyHorizontalControl(player, input, dt) {
 }
 
 function tryJump(player) {
-  if (player.jumpBufferTimer <= 0 || player.coyoteTimer <= 0) return;
+  if (player.jumpBufferTimer <= 0) return;
 
-  player.velocityY = -JUMP_SPEED;
-  player.isJumping = true;
-  // Флажок на один шаг: по нему сессия понимает, что пора щёлкнуть звуком.
-  player.jumpedNow = true;
-  player.onGround = false;
-  // Оба окна закрываем сразу, иначе одно нажатие успеет отработать дважды:
-  // сначала как буфер, а через кадр — ещё раз внутри койот-времени.
-  player.jumpBufferTimer = 0;
-  player.coyoteTimer = 0;
+  // Обычный прыжок: с земли или в койот-окне.
+  if (player.coyoteTimer > 0) {
+    player.velocityY = -JUMP_SPEED;
+    player.isJumping = true;
+    player.jumpedNow = true;
+    player.onGround = false;
+    // Оба окна закрываем сразу, иначе одно нажатие успеет отработать дважды:
+    // сначала как буфер, а через кадр — ещё раз внутри койот-времени.
+    player.jumpBufferTimer = 0;
+    player.coyoteTimer = 0;
+    return;
+  }
+
+  // Двойной прыжок: в воздухе, есть крылья и второй прыжок ещё не потрачен.
+  if (player.doubleJumpTimer > 0 && !player.airJumpUsed) {
+    player.velocityY = -DOUBLE_JUMP_SPEED;
+    player.isJumping = true;
+    player.airJumpUsed = true;
+    player.jumpedNow = true;
+    player.jumpBufferTimer = 0;
+  }
 }
 
 function applyJumpCut(player, input) {
@@ -207,6 +227,7 @@ export function respawn(player) {
   player.coyoteTimer = 0;
   player.jumpBufferTimer = 0;
   player.isJumping = false;
+  player.airJumpUsed = false;
   player.popTimer = 0;
   player.ridingPlatform = null;
 }
