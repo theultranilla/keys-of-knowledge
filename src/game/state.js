@@ -9,6 +9,8 @@ export const SCENE = {
   WARDROBE: 'wardrobe',
   PLAYING: 'playing',
   PAUSED: 'paused',
+  // Хаб данжа: экран улучшений перед забегом.
+  DUNGEON_HUB: 'dungeon_hub',
   // Открыта карточка с задачей: мир стоит, но это не пауза — выйти из неё
   // можно только через саму карточку.
   TASK: 'task',

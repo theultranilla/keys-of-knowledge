@@ -52,7 +52,8 @@ const menu = createMenu({
   levels,
   on: {
     play: () => startLevel(nextPlayableId()),
-    dungeon: () => startDungeon(),
+    dungeon: () => state.go(SCENE.DUNGEON_HUB),
+    startRun: () => startDungeon(),
     levels: () => state.go(SCENE.LEVELS),
     wardrobe: () => state.go(SCENE.WARDROBE),
     settings: () => state.go(SCENE.SETTINGS),
@@ -129,7 +130,7 @@ function startDungeon() {
   currentLevelId = null;
   tasks = createTaskEngine({ runSeed: Date.now() });
   session = createDungeonSession({
-    input, audio, save, canvas, modal, tasks,
+    input, audio, save, canvas, modal, tasks, upgrades: save.dungeonUpgrades,
     // Смерть в данже: показываем итог забега поверх замершего мира.
     onDeath: (summary) => {
       overlays.showDefeat(summary);
@@ -169,6 +170,9 @@ function onSceneChange(scene) {
       break;
     case SCENE.SETTINGS:
       menu.showSettings();
+      break;
+    case SCENE.DUNGEON_HUB:
+      menu.showDungeonHub();
       break;
     case SCENE.PAUSED:
       menu.hide();

@@ -6,6 +6,7 @@
 // Игра в такой ситуации обязана просто работать без сохранения.
 
 import { FREE_ITEMS, DEFAULT_SKIN, COSMETICS_BY_ID } from './game/skins.js';
+import { UPGRADE_BY_ID, upgradeCost } from './game/dungeonUpgrades.js';
 
 export const SAVE_KEY = 'keysofknowledge.save.v1';
 export const SAVE_VERSION = 1;
@@ -181,6 +182,30 @@ export function createSave() {
       return true;
     },
 
+    // --- Данж: постоянные улучшения ---
+    get dungeonUpgrades() {
+      return data.dungeon.upgrades;
+    },
+
+    upgradeLevel(id) {
+      return data.dungeon.upgrades[id] ?? 0;
+    },
+
+    // Купить следующий уровень улучшения за монеты кошелька. true — получилось.
+    buyUpgrade(id) {
+      const upgrade = UPGRADE_BY_ID.get(id);
+      if (!upgrade) return false;
+      const level = data.dungeon.upgrades[id] ?? 0;
+      if (level >= upgrade.max) return false;
+      const cost = upgradeCost(upgrade, level);
+      if (this.balance < cost) return false;
+
+      data.player.coinsSpent = (data.player.coinsSpent ?? 0) + cost;
+      data.dungeon.upgrades[id] = level + 1;
+      persist();
+      return true;
+    },
+
     // Надеть купленный предмет в его категорию.
     equip(id) {
       const item = COSMETICS_BY_ID.get(id);
@@ -212,7 +237,8 @@ function createDefaults() {
     levels: {},
     tasks: {},
     settings: { sound: true, music: true, reducedMotion: false },
-    wardrobe: { owned: [...FREE_ITEMS], equipped: { ...DEFAULT_SKIN } }
+    wardrobe: { owned: [...FREE_ITEMS], equipped: { ...DEFAULT_SKIN } },
+    dungeon: { upgrades: {} }
   };
 }
 
@@ -235,6 +261,8 @@ function migrate(raw) {
     wardrobe: {
       owned: [...new Set([...FREE_ITEMS, ...(raw.wardrobe?.owned ?? [])])],
       equipped: { ...DEFAULT_SKIN, ...(raw.wardrobe?.equipped ?? {}) }
-    }
+    },
+    // Улучшения данжа появились позже — у старых сейвов их нет.
+    dungeon: { upgrades: { ...(raw.dungeon?.upgrades ?? {}) } }
   };
 }

@@ -51,6 +51,12 @@ const ru = {
   'wardrobe.cat.hat': 'Шапка',
   'wardrobe.cat.beard': 'Борода',
 
+  'hub.title': 'Улучшения данжа',
+  'hub.hint': 'Монеты из забегов тратятся здесь — усиления навсегда.',
+  'hub.start': '▶ Начать забег',
+  'hub.level': 'ур. {level}/{max}',
+  'hub.maxed': 'макс',
+
   'levels.title': 'Выбор уровня',
   'levels.locked': 'Закрыто',
   'levels.coins': '{coins} из {max} монет',

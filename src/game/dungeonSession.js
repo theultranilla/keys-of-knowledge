@@ -7,6 +7,7 @@ import {
 } from './dungeonFloor.js';
 import { createDungeonTouch } from './dungeonTouch.js';
 import { createCombat, WEAPONS, WEAPON_DROPS } from './dungeonCombat.js';
+import { upgradeBonuses } from './dungeonUpgrades.js';
 import { drawMinimap, drawHp, drawEnemiesLeft, drawFloorBanner, drawBossBar } from './dungeonHud.js';
 import { prefersReducedMotion } from '../engine/motion.js';
 import { t } from '../ui/i18n.js';
@@ -24,11 +25,16 @@ const NOVA_FX_TIME = 0.4, NOVA_RADIUS = 260; // ударная волна «Но
 const DASH_SPEED = 620, DASH_TIME = 0.16, DASH_CD = 0.7; // рывок: скорость, длительность (=окно неуязвимости), кулдаун
 const INTERACT_R = 42; // дальность контекстного взаимодействия (E / тач-кнопка)
 
-export function createDungeonSession({ input, audio, save, canvas, modal, tasks, onDeath }) {
+export function createDungeonSession({ input, audio, save, canvas, modal, tasks, onDeath, upgrades }) {
+  // Постоянные улучшения из хаба — прибавка к стартовым характеристикам.
+  const bonus = upgradeBonuses(upgrades ?? {});
+  const startHp = PLAYER_HP + bonus.maxHp;
+  const dashCdBase = Math.max(0.25, DASH_CD - bonus.dashCdReduce);
+  const coinBonus = bonus.coinBonus;
   const player = {
     x: 0, y: 0, width: PLAYER_WIDTH, height: PLAYER_HEIGHT,
     prevX: 0, prevY: 0, aim: { x: 1, y: 0 }, facing: 1,
-    hp: PLAYER_HP, maxHp: PLAYER_HP, hurtCd: 0, dmgMul: 1, coins: 0, bombs: 1, weapon: 'spark'
+    hp: startHp, maxHp: startHp, hurtCd: 0, dmgMul: 1 + bonus.dmgMul, coins: 0, bombs: 1 + bonus.bombs, weapon: 'spark'
   };
   let busy = false; // пока открыта карточка задачи — мир стоит
   let dead = false; // игрок погиб — забег заморожен до перезапуска
@@ -148,7 +154,7 @@ export function createDungeonSession({ input, audio, save, canvas, modal, tasks,
     const m = Math.hypot(dx, dy);
     if (m > 0.1) { dashDir.x = dx / m; dashDir.y = dy / m; }
     else { dashDir.x = player.aim.x; dashDir.y = player.aim.y; }
-    dashTime = DASH_TIME; dashCd = DASH_CD;
+    dashTime = DASH_TIME; dashCd = dashCdBase;
     audio?.play?.('dash');
   }
 
@@ -408,7 +414,7 @@ export function createDungeonSession({ input, audio, save, canvas, modal, tasks,
       const p = current.pickups[i];
       if (p.kind === 'weapon') continue; // оружие подбирается только через взаимодействие (E), не само
       if (Math.hypot(c.x - p.x, c.y - p.y) > 28) continue;
-      if (p.kind === 'coin') player.coins += p.value;
+      if (p.kind === 'coin') player.coins += p.value + coinBonus; // «Удача» добавляет к каждой монете
       else if (p.kind === 'bomb') player.bombs += 1;
       else player.hp = Math.min(player.maxHp, player.hp + p.value);
       audio?.play?.('coin');

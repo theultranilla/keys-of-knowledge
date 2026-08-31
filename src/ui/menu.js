@@ -2,6 +2,7 @@ import { el, button } from './dom.js';
 import { t } from './i18n.js';
 import { drawCharacter } from '../engine/character.js';
 import { CATEGORIES, itemsByCategory } from '../game/skins.js';
+import { UPGRADES, upgradeCost } from '../game/dungeonUpgrades.js';
 
 // Главное меню, выбор уровня и настройки. Все три — один и тот же слой поверх
 // canvas, просто с разным содержимым: так между ними нельзя оказаться нигде.
@@ -179,6 +180,44 @@ export function createMenu({ mount, save, levels, on }) {
     ];
   }
 
+  // --- Хаб данжа: постоянные улучшения ---
+  function upgradeCard(u) {
+    const level = save.upgradeLevel(u.id);
+    const maxed = level >= u.max;
+    const cost = upgradeCost(u, level);
+
+    let control;
+    if (maxed) {
+      control = el('span', { class: 'wardrobe__badge', text: t('hub.maxed') });
+    } else if (save.balance >= cost) {
+      control = button('wardrobe__act wardrobe__act--buy', t('wardrobe.buy', { price: cost }), () => {
+        save.buyUpgrade(u.id);
+        show(dungeonHubScreen);
+      });
+    } else {
+      control = el('span', { class: 'wardrobe__price', text: t('wardrobe.noMoney', { price: cost }) });
+    }
+
+    return el('div', { class: `wardrobe__item${maxed ? ' wardrobe__item--on' : ''}` },
+      el('span', { class: 'wardrobe__name', text: u.name }),
+      el('span', { class: 'hub__desc', text: u.desc }),
+      el('span', { class: 'hub__level', text: t('hub.level', { level, max: u.max }) }),
+      control);
+  }
+
+  function dungeonHubScreen() {
+    return [
+      el('h2', { class: 'screen__title', text: t('hub.title') }),
+      el('div', { class: 'wardrobe__wallet', text: t('wardrobe.balance', { coins: save.balance }) }),
+      el('p', { class: 'wardrobe__hint', text: t('hub.hint') }),
+      el('div', { class: 'wardrobe' }, UPGRADES.map(upgradeCard)),
+      el('div', { class: 'screen__actions screen__actions--row' },
+        button('screen__button screen__button--primary', t('hub.start'), () => on.startRun()),
+        button('screen__button', t('menu.back'), () => on.back())),
+      warning()
+    ];
+  }
+
   function toggle(name, checked, onChange) {
     const input = el('input', { type: 'checkbox', class: 'switch__input', id: `set-${name}` });
     input.checked = Boolean(checked);
@@ -195,6 +234,7 @@ export function createMenu({ mount, save, levels, on }) {
     showLevels: () => show(levelsScreen),
     showWardrobe: () => show(wardrobeScreen),
     showSettings: () => show(settingsScreen),
+    showDungeonHub: () => show(dungeonHubScreen),
     hide
   };
 }
