@@ -23,7 +23,12 @@ const CHARGER_COLOR = '#d1552b';
 const SHOOTER_RANGE = 250, SHOOTER_FIRE_CD = 1.3, SHOOTER_SPEED = 70;
 const TANK_R = 26, TANK_HP = 9, TANK_SPEED = 45;
 const ESHOT_SPEED = 280, ESHOT_R = 6, ESHOT_LIFE = 2.4, ESHOT_DMG = 1;
-const ENEMY_COLOR = { chaser: PALETTE.coral, shooter: '#f0a04b', tank: '#8a3a52', boss: '#b0343f' };
+const ENEMY_COLOR = {
+  chaser: PALETTE.coral, shooter: '#f0a04b', tank: '#8a3a52', boss: '#b0343f',
+  bomber: '#e0902f', splitter: '#5ad06a', healer: '#dfa0d0'
+};
+// Бомбер взрывается кольцом пуль; лекарь лечит соседей.
+const BOMBER_SHOTS = 8, HEAL_CD = 2.4, HEAL_AMOUNT = 2, HEAL_RANGE = 220;
 // Отдача от попаданий: скорость толчка и затухание за кадр, плюс «масса» по типу
 // (танк тяжёлый, босс не сдвигается) — чтобы удар ощущался, но не ломал бой.
 const KB_STRENGTH = 230, KB_DECAY = 0.85;
@@ -129,6 +134,26 @@ export function createCombat({ audio, hitPlayer, onClear, onEnemyHit }) {
     }
   }
 
+  // Бомбер взрывается кольцом вражьих пуль от своей точки.
+  function explode(e) {
+    e.exploded = true;
+    for (let k = 0; k < BOMBER_SHOTS; k++) {
+      const a = (k / BOMBER_SHOTS) * Math.PI * 2;
+      eShots.push({ x: e.x, y: e.y, vx: Math.cos(a) * ESHOT_SPEED, vy: Math.sin(a) * ESHOT_SPEED, life: ESHOT_LIFE });
+    }
+  }
+
+  // Лекарь лечит ближайшего раненого союзника (не другого лекаря) в радиусе.
+  function healNearby(healer, enemies) {
+    let target = null, best = Infinity;
+    for (const o of enemies) {
+      if (o === healer || o.hp <= 0 || o.kind === 'healer' || o.hp >= o.maxHp) continue;
+      const dd = Math.hypot(o.x - healer.x, o.y - healer.y);
+      if (dd < HEAL_RANGE && dd < best) { best = dd; target = o; }
+    }
+    if (target) { target.hp = Math.min(target.maxHp, target.hp + HEAL_AMOUNT); target.hitFlash = HIT_FLASH; }
+  }
+
   // pc — центр игрока {x,y}; half — половина ширины игрока; dmgMul — множитель урона.
   function update(dt, floor, current, pc, dmgMul, half) {
     const walls = allWalls(floor);
@@ -164,16 +189,26 @@ export function createCombat({ audio, hitPlayer, onClear, onEnemyHit }) {
     for (let i = current.enemies.length - 1; i >= 0; i--) {
       const e = current.enemies[i];
       if (e.hitFlash > 0) e.hitFlash -= dt;
-      if (e.hp <= 0) { current.enemies.splice(i, 1); audio?.play?.('enemyDie'); onEnemyHit?.(e.x, e.y, true, e.elite); continue; }
+      if (e.hp <= 0) {
+        if (e.kind === 'bomber' && !e.exploded) explode(e);              // убитый бомбер тоже взрывается
+        if (e.kind === 'splitter') splitInto(current, e, floor.floorNumber); // делится на двух мелких
+        current.enemies.splice(i, 1); audio?.play?.('enemyDie'); onEnemyHit?.(e.x, e.y, true, e.elite); continue;
+      }
       const dx = pc.x - e.x, dy = pc.y - e.y, d = Math.hypot(dx, dy) || 1, nx = dx / d, ny = dy / d;
       if (e.kind === 'shooter') {
         if (d > SHOOTER_RANGE + 30) { e.x += nx * e.speed * dt; e.y += ny * e.speed * dt; }
         else if (d < SHOOTER_RANGE - 30) { e.x -= nx * e.speed * dt; e.y -= ny * e.speed * dt; }
         e.fireCd -= dt;
         if (e.fireCd <= 0) { eShots.push({ x: e.x, y: e.y, vx: nx * ESHOT_SPEED, vy: ny * ESHOT_SPEED, life: ESHOT_LIFE }); e.fireCd = SHOOTER_FIRE_CD; }
+      } else if (e.kind === 'healer') {
+        // держит дистанцию и раз в HEAL_CD лечит ближайшего раненого союзника
+        if (d > HEAL_RANGE) { e.x += nx * e.speed * dt; e.y += ny * e.speed * dt; }
+        else if (d < HEAL_RANGE - 60) { e.x -= nx * e.speed * dt; e.y -= ny * e.speed * dt; }
+        e.fireCd -= dt;
+        if (e.fireCd <= 0) { healNearby(e, current.enemies); e.fireCd = HEAL_CD; }
       } else if (e.kind === 'boss') {
         bossBehavior(e, dt, nx, ny);
-      } else { e.x += nx * e.speed * dt; e.y += ny * e.speed * dt; }
+      } else { e.x += nx * e.speed * dt; e.y += ny * e.speed * dt; } // chaser/tank/bomber/splitter
       // Отдача от попаданий поверх обычного движения, с затуханием.
       if (e.knockX || e.knockY) {
         e.x += e.knockX * dt; e.y += e.knockY * dt;
@@ -184,6 +219,8 @@ export function createCombat({ audio, hitPlayer, onClear, onEnemyHit }) {
       // Столбы теперь твёрдые и для врагов, но выталкивание радиальное — враг
       // скользит вдоль столба и обходит его, а не втыкается намертво (нет софт-лока).
       if (current.obstacles) for (const o of current.obstacles) pushCircleOutOfRect(e, o);
+      // Бомбер детонирует у игрока: кольцо пуль + гибель (взрыв обработает след. кадр).
+      if (e.kind === 'bomber' && !e.exploded && d < e.r + half + 12) { explode(e); e.hp = 0; }
       if (d < e.r + half && hitPlayer(CONTACT_DMG)) return;
     }
     if (current.enemies.length === 0) { current.cleared = true; current.doorsClosed = false; onClear(current); }
@@ -204,6 +241,16 @@ export function createCombat({ audio, hitPlayer, onClear, onEnemyHit }) {
         ctx.strokeStyle = '#ffe08a'; ctx.lineWidth = 3;
         ctx.beginPath(); ctx.arc(e.x, e.y, e.r + 5, 0, Math.PI * 2); ctx.stroke();
       }
+      if (e.kind === 'bomber') { // ободок «вот-вот рванёт»
+        ctx.strokeStyle = '#ffcaa0'; ctx.lineWidth = 2;
+        ctx.beginPath(); ctx.arc(e.x, e.y, e.r + 3, 0, Math.PI * 2); ctx.stroke();
+      } else if (e.kind === 'splitter') { // шов посередине
+        ctx.strokeStyle = 'rgba(10,20,10,0.5)'; ctx.lineWidth = 2;
+        ctx.beginPath(); ctx.moveTo(e.x, e.y - e.r); ctx.lineTo(e.x, e.y + e.r); ctx.stroke();
+      } else if (e.kind === 'healer') { // белый крест
+        ctx.strokeStyle = '#fff'; ctx.lineWidth = 2.5;
+        ctx.beginPath(); ctx.moveTo(e.x - 5, e.y); ctx.lineTo(e.x + 5, e.y); ctx.moveTo(e.x, e.y - 5); ctx.lineTo(e.x, e.y + 5); ctx.stroke();
+      }
     }
     ctx.fillStyle = '#ff8a4b';
     for (const s of eShots) { ctx.beginPath(); ctx.arc(s.x, s.y, ESHOT_R, 0, Math.PI * 2); ctx.fill(); }
@@ -214,13 +261,19 @@ export function createCombat({ audio, hitPlayer, onClear, onEnemyHit }) {
   return { reset, spawnEnemies, fire, nova, update, draw };
 }
 
-// Глубже — меньше простых преследователей, больше стрелков и танков.
+// Глубже — меньше простых преследователей, больше стрелков/танков и особых видов
+// (бомбер с 3-го, сплиттер с 4-го, лекарь с 5-го этажа).
 function pickKind(floorNumber) {
   const roll = Math.random();
-  const shooterP = Math.min(0.42, 0.22 + floorNumber * 0.03);
-  const tankP = floorNumber >= 2 ? Math.min(0.28, 0.08 + floorNumber * 0.03) : 0;
-  if (roll < shooterP) return 'shooter';
-  if (roll < shooterP + tankP) return 'tank';
+  const table = [
+    ['shooter', Math.min(0.34, 0.2 + floorNumber * 0.02)],
+    ['tank', floorNumber >= 2 ? Math.min(0.22, 0.06 + floorNumber * 0.02) : 0],
+    ['bomber', floorNumber >= 3 ? 0.12 : 0],
+    ['splitter', floorNumber >= 4 ? 0.12 : 0],
+    ['healer', floorNumber >= 5 ? 0.1 : 0]
+  ];
+  let acc = 0;
+  for (const [kind, p] of table) { acc += p; if (roll < acc) return kind; }
   return 'chaser';
 }
 
@@ -237,13 +290,16 @@ function makeEnemy(x, y, kind, floorNumber, elite = false, variant = 'gunner') {
   let r = ENEMY_R, hp = ENEMY_HP, speed = ENEMY_SPEED;
   if (kind === 'shooter') { r = 14; hp = 2; speed = SHOOTER_SPEED; }
   else if (kind === 'tank') { r = TANK_R; hp = TANK_HP; speed = TANK_SPEED; }
+  else if (kind === 'bomber') { r = 15; hp = 3; speed = 120; }   // быстрый смертник
+  else if (kind === 'splitter') { r = 18; hp = 5; speed = 80; }  // делится при смерти
+  else if (kind === 'healer') { r = 15; hp = 4; speed = SHOOTER_SPEED; } // держит дистанцию, лечит
   // Крепче и чуть шустрее с глубиной, но скорость — с потолком, чтобы враг не
   // превратился в неотбиваемую пулю.
   const depth = floorNumber - 1;
   hp = Math.max(1, Math.round(hp * (1 + depth * RAMP_HP)));
   speed *= Math.min(SPEED_CAP, 1 + depth * RAMP_SPEED);
   if (elite) { r *= ELITE_R_MUL; hp = Math.round(hp * ELITE_HP_MUL); speed *= ELITE_SLOW; }
-  return { x, y, r, hp, maxHp: hp, speed, kind, elite, hitFlash: 0, knockX: 0, knockY: 0, swirl: Math.random() < 0.5 ? 1 : -1, fireCd: rand(0.5, SHOOTER_FIRE_CD) };
+  return { x, y, r, hp, maxHp: hp, speed, kind, elite, exploded: false, hitFlash: 0, knockX: 0, knockY: 0, swirl: Math.random() < 0.5 ? 1 : -1, fireCd: rand(0.5, SHOOTER_FIRE_CD) };
 }
 
 // Выталкивание круга-врага из прямоугольника-столба по кратчайшему направлению.
@@ -268,6 +324,16 @@ function pushCircleOutOfRect(e, o) {
   // враг всегда обходил столб, а не залипал (страховка от софт-лока).
   e.x += -(dy / d) * (e.swirl || 1) * 0.6;
   e.y += (dx / d) * (e.swirl || 1) * 0.6;
+}
+
+// Сплиттер при смерти делится на двух мелких быстрых преследователей.
+function splitInto(current, e, floorNumber) {
+  for (let k = 0; k < 2; k++) {
+    const child = makeEnemy(e.x + (k ? 12 : -12), e.y, 'chaser', floorNumber);
+    child.r = 11;
+    child.hp = child.maxHp = Math.max(1, Math.round(child.hp * 0.5));
+    current.enemies.push(child);
+  }
 }
 
 function rand(lo, hi) { return lo + Math.random() * (hi - lo); }
