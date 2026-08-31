@@ -3,7 +3,7 @@ import { drawCharacter } from '../engine/character.js';
 import { DEFAULT_SKIN } from './skins.js';
 import {
   generateFloor, roomInterior, roomContains, allWalls, drawRooms, spawnChests, spawnShop, bossReward,
-  spawnTraps, drawTraps, trapsOut, TRAP_SIZE, spawnObstacles, spawnMini, ROOM_H, WALL
+  spawnTraps, drawTraps, trapsOut, TRAP_SIZE, spawnObstacles, spawnMini, spawnAltars, ROOM_H, WALL
 } from './dungeonFloor.js';
 import { createDungeonTouch } from './dungeonTouch.js';
 import { createCombat, WEAPONS, WEAPON_DROPS } from './dungeonCombat.js';
@@ -65,6 +65,7 @@ export function createDungeonSession({ input, audio, save, canvas, modal, tasks,
     spawnTraps(floor);  // шипы в части боевых комнат
     spawnObstacles(floor); // столбы-укрытия в боевых комнатах
     spawnMini(floor);      // логово мини-босса (с этажа 3)
+    spawnAltars(floor);    // алтарь-жертвенник и костёр-отдых в особых комнатах
     current = floor.start;
     current.visited = true;
     player.x = current.cx - player.width / 2;
@@ -305,6 +306,8 @@ export function createDungeonSession({ input, audio, save, canvas, modal, tasks,
     if (current.stands) for (const st of current.stands) if (!st.bought) {
       const d = near(st.x, st.y); if (d >= 0) { best = { type: 'shop', target: st }; bestD = d; }
     }
+    if (current.altar && !current.altar.used) { const d = near(current.altar.x, current.altar.y); if (d >= 0) { best = { type: 'altar', target: current.altar }; bestD = d; } }
+    if (current.campfire && !current.campfire.used) { const d = near(current.campfire.x, current.campfire.y); if (d >= 0) { best = { type: 'heal', target: current.campfire }; bestD = d; } }
     if (current.portal) { const d = near(current.portal.x, current.portal.y); if (d >= 0) best = { type: 'portal', target: current.portal }; }
     focus = best;
   }
@@ -313,7 +316,28 @@ export function createDungeonSession({ input, audio, save, canvas, modal, tasks,
     if (f.type === 'weapon') swapWeapon(f.target);
     else if (f.type === 'chest') openChest(f.target);
     else if (f.type === 'shop') buyStand(f.target);
+    else if (f.type === 'altar') useAltar(f.target);
+    else if (f.type === 'heal') useCampfire(f.target);
     else if (f.type === 'portal') descend();
+  }
+
+  // Алтарь: раз за забег — минус 1 к макс. HP за +0.4 к урону (не ниже 2 HP).
+  function useAltar(a) {
+    if (a.used || player.maxHp <= 2) return;
+    a.used = true;
+    player.maxHp -= 1;
+    player.hp = Math.min(player.hp, player.maxHp);
+    player.dmgMul += 0.4;
+    audio?.play?.('key');
+    addShake(6);
+  }
+
+  // Костёр: раз за забег — подлечиться (+4 HP, не выше макс.).
+  function useCampfire(f) {
+    if (f.used) return;
+    f.used = true;
+    player.hp = Math.min(player.maxHp, player.hp + 4);
+    audio?.play?.('key');
   }
 
   // Смена оружия: старое роняем на месте — можно взять обратно (тот же пикап
@@ -412,12 +436,14 @@ export function createDungeonSession({ input, audio, save, canvas, modal, tasks,
     if (focus.type === 'weapon') return t('dungeon.take', { name: (WEAPONS[focus.target.weaponId] || WEAPONS.spark).name });
     if (focus.type === 'chest') return t('dungeon.open');
     if (focus.type === 'shop') return t('dungeon.buy', { label: focus.target.label, cost: focus.target.cost });
+    if (focus.type === 'altar') return t('dungeon.altar');
+    if (focus.type === 'heal') return t('dungeon.rest');
     if (focus.type === 'portal') return t('dungeon.descend');
     return null;
   }
 
   function render(ctx, alpha) {
-    ctx.fillStyle = '#0c1226';
+    ctx.fillStyle = floor.biome?.bg ?? '#0c1226'; // фон по биому этажа
     ctx.fillRect(0, 0, VIEW_WIDTH, VIEW_HEIGHT);
 
     let camX = lerp(cam.prevX, cam.x, alpha), camY = lerp(cam.prevY, cam.y, alpha);

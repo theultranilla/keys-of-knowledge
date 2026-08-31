@@ -17,17 +17,32 @@ const DIRS = [
   { x: 1, y: 0, side: 'e', opp: 'w' }
 ];
 
+// Тинты особых комнат фиксированы (сигналят тип), а пол/стены обычных комнат и
+// фон меняет биом — так глубина читается визуально.
 const FLOOR_TINT = {
-  start: '#20305c',
-  combat: '#23305A',
   treasure: '#3a3418',
   shop: '#2c2044',
-  boss: '#3a1f2b'
+  boss: '#3a1f2b',
+  shrine: '#2c2c1a',
+  heal: '#1f3a2e'
 };
+
+// Биомы по глубине: пещеры → лёд → жар → бездна. Меняют цвет пола обычных комнат,
+// стен и фона. Числа-цвета на ощупь.
+const BIOMES = [
+  { name: 'cave',  floor: '#23305A', wall: '#151b34', bg: '#0c1226' },
+  { name: 'ice',   floor: '#25415a', wall: '#2a3f56', bg: '#0b1a24' },
+  { name: 'ember', floor: '#3a2626', wall: '#3a2020', bg: '#180c0c' },
+  { name: 'void',  floor: '#2c2440', wall: '#241a34', bg: '#0e0a1a' }
+];
+
+export function biomeFor(floorNumber) {
+  return BIOMES[Math.min(BIOMES.length - 1, Math.floor((floorNumber - 1) / 2))];
+}
 
 const key = (x, y) => `${x},${y}`;
 
-export function generateFloor(floorNumber, roomCount = 8) {
+export function generateFloor(floorNumber, roomCount = 9) {
   const kindOf = new Map();
   const doorsOf = new Map();
   const order = [];
@@ -58,11 +73,13 @@ export function generateFloor(floorNumber, roomCount = 8) {
   }
   if (boss.x !== 0 || boss.y !== 0) kindOf.set(key(boss.x, boss.y), 'boss');
 
-  // Сокровищница + лавка среди остальных.
+  // Сокровищница + лавка + иногда алтарь и костёр среди остальных комнат.
   const rest = order.filter((c) => !(c.x === 0 && c.y === 0) && !(c.x === boss.x && c.y === boss.y));
   shuffle(rest);
   if (rest[0]) kindOf.set(key(rest[0].x, rest[0].y), 'treasure');
   if (rest[1]) kindOf.set(key(rest[1].x, rest[1].y), 'shop');
+  if (rest[2] && Math.random() < 0.6) kindOf.set(key(rest[2].x, rest[2].y), 'shrine');
+  if (rest[3] && Math.random() < 0.6) kindOf.set(key(rest[3].x, rest[3].y), 'heal');
 
   const rooms = order.map((c, i) => ({
     cell: c,
@@ -82,7 +99,7 @@ export function generateFloor(floorNumber, roomCount = 8) {
   const roomByCell = new Map();
   for (const r of rooms) roomByCell.set(key(r.cell.x, r.cell.y), r);
 
-  return { rooms, roomByCell, start: roomByCell.get('0,0'), floorNumber };
+  return { rooms, roomByCell, start: roomByCell.get('0,0'), floorNumber, biome: biomeFor(floorNumber) };
 }
 
 // Столбы-укрытия в боевых комнатах: разные расстановки (в тайлах от центра).
@@ -161,14 +178,15 @@ export function allWalls(floor) {
 }
 
 export function drawRooms(ctx, floor) {
-  // пол
+  const biome = floor.biome ?? BIOMES[0];
+  // пол: у обычных комнат — цвет биома, у особых — свой сигнальный тинт
   for (const room of floor.rooms) {
     const it = roomInterior(room);
-    ctx.fillStyle = FLOOR_TINT[room.kind] ?? FLOOR_TINT.combat;
+    ctx.fillStyle = FLOOR_TINT[room.kind] ?? biome.floor;
     ctx.fillRect(it.x0, it.y0, it.x1 - it.x0, it.y1 - it.y0);
   }
-  // стены
-  ctx.fillStyle = '#151b34';
+  // стены — цвет биома
+  ctx.fillStyle = biome.wall;
   for (const room of floor.rooms) for (const r of roomWalls(room)) ctx.fillRect(r.x, r.y, r.w, r.h);
   // столбы-укрытия — чуть светлее стен, с бликом, чтобы читались как объекты в комнате
   for (const room of floor.rooms) if (room.obstacles) for (const o of room.obstacles) {
@@ -218,6 +236,26 @@ export function drawRooms(ctx, floor) {
   }
   ctx.textAlign = 'left';
 
+  // алтарь-жертвенник (shrine) и костёр-отдых (heal)
+  for (const room of floor.rooms) {
+    if (room.altar && !room.altar.used) {
+      const a = room.altar;
+      ctx.fillStyle = '#6b6f3a';
+      ctx.fillRect(a.x - 16, a.y - 8, 32, 20);       // тумба алтаря
+      ctx.fillStyle = '#c9c24a';
+      ctx.beginPath(); ctx.arc(a.x, a.y - 14, 7, 0, Math.PI * 2); ctx.fill(); // сфера-подношение
+    }
+    if (room.campfire && !room.campfire.used) {
+      const f = room.campfire;
+      ctx.fillStyle = '#5a3a20';
+      ctx.fillRect(f.x - 14, f.y + 8, 28, 5);         // поленья
+      ctx.fillStyle = PALETTE.coral;
+      ctx.beginPath(); ctx.moveTo(f.x, f.y - 16); ctx.lineTo(f.x + 10, f.y + 8); ctx.lineTo(f.x - 10, f.y + 8); ctx.closePath(); ctx.fill();
+      ctx.fillStyle = PALETTE.amber;
+      ctx.beginPath(); ctx.moveTo(f.x, f.y - 6); ctx.lineTo(f.x + 5, f.y + 8); ctx.lineTo(f.x - 5, f.y + 8); ctx.closePath(); ctx.fill();
+    }
+  }
+
   // портал (за боссом)
   for (const room of floor.rooms) if (room.portal) {
     ctx.fillStyle = PALETTE.amber;
@@ -241,6 +279,14 @@ export function spawnChests(floor) {
       x: room.cx + (i - 1) * 92, y: room.cy - 24,
       subject: s.subject, reward: s.reward, color: s.color, label: s.label, opened: false
     }));
+  }
+}
+
+// Алтарь: одна интеракция за забег — платишь макс. HP за прибавку к урону.
+export function spawnAltars(floor) {
+  for (const room of floor.rooms) {
+    if (room.kind === 'shrine') room.altar = { x: room.cx, y: room.cy - 10, used: false };
+    if (room.kind === 'heal') room.campfire = { x: room.cx, y: room.cy - 4, used: false };
   }
 }
 

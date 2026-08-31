@@ -99,7 +99,9 @@ const ru = {
   'dungeon.take': 'Взять: {name}',
   'dungeon.open': 'Открыть',
   'dungeon.buy': 'Купить: {label} · {cost}',
-  'dungeon.descend': 'Вниз'
+  'dungeon.descend': 'Вниз',
+  'dungeon.altar': 'Жертва: −1 макс.HP → +урон',
+  'dungeon.rest': 'Отдохнуть (+HP)'
 };
 
 // Похвалы за верный ответ — пул, из которого берём случайную, чтобы не приедалось.
