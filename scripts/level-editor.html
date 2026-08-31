@@ -131,6 +131,35 @@
             <button id="addHazard">Добавить</button>
           </div>
           <div class="list" id="hazardList"></div>
+
+          <h2>Враги</h2>
+          <div class="row">
+            from <input type="number" id="efx" value="10" /> <input type="number" id="efy" value="13" />
+            to <input type="number" id="etx" value="16" /> <input type="number" id="ety" value="13" />
+            скор. <input type="number" id="espeed" value="50" />
+            тип <select id="ekind"><option value="walker">ходок</option><option value="flyer">летун</option></select>
+            <button id="addEnemy">Добавить</button>
+          </div>
+          <div class="list" id="enemyList"></div>
+
+          <h2>Пушки (снаряды)</h2>
+          <div class="row">
+            на <input type="number" id="canx" value="26" /> <input type="number" id="cany" value="12" />
+            гориз <select id="candir"><option value="-1">влево</option><option value="0">—</option><option value="1">вправо</option></select>
+            верт <select id="candiry"><option value="0">—</option><option value="-1">вверх</option><option value="1">вниз</option></select>
+            скор. <input type="number" id="canspeed" value="130" /> интервал <input type="number" id="canint" value="1.8" step="0.1" /> фаза <input type="number" id="canphase" value="0" step="0.1" />
+            вид <select id="cankind"><option value="ball">мяч</option><option value="bullet">пуля</option></select>
+            <button id="addCannon">Добавить</button>
+          </div>
+          <div class="list" id="cannonList"></div>
+
+          <h2>Финиш-флаг</h2>
+          <div class="row">
+            на <input type="number" id="flagx" value="37" /> <input type="number" id="flagy" value="12" />
+            высота <input type="number" id="flagh" value="6" />
+            <button id="setFlag">Поставить</button> <button id="clearFlag">Убрать</button>
+            <span id="flagInfo"></span>
+          </div>
         </div>
 
         <div class="panel" style="margin-top:12px">
@@ -156,7 +185,8 @@
       // levels/*.json. При импорте чужой легенды сводим тайлы по ИМЕНИ к этим символам.
       const LEGEND = {
         '#': 'ground', '=': 'platform', 'S': 'spring', '^': 'spike',
-        'o': 'coin', 'C': 'chest', 'D': 'door', 'F': 'checkpoint', '.': 'empty'
+        'o': 'coin', 'C': 'chest', 'D': 'door', 'F': 'checkpoint',
+        '*': 'star', 'H': 'shield', 'W': 'wing', 'x': 'crumble', '.': 'empty'
       };
       const NAME_TO_SYMBOL = Object.fromEntries(Object.entries(LEGEND).map(([s, n]) => [n, s]));
       const KEY_COLOR = { amber: PALETTE.amber, teal: PALETTE.teal, coral: PALETTE.coral };
@@ -170,6 +200,10 @@
         { id: 'F', name: 'Чекпоинт', color: PALETTE.teal },
         { id: 'C', name: 'Сундук', color: PALETTE.amber },
         { id: 'D', name: 'Дверь', color: PALETTE.teal },
+        { id: '*', name: 'Звезда', color: PALETTE.amber },
+        { id: 'H', name: 'Щит', color: PALETTE.teal },
+        { id: 'W', name: 'Крылья', color: PALETTE.chalk },
+        { id: 'x', name: 'Рушится', color: '#c9a24a' },
         { id: '@', name: 'Спавн', color: '#ffffff' },
         { id: '.', name: 'Ластик', color: 'transparent' }
       ];
@@ -177,7 +211,7 @@
       const state = {
         cols: 40, rows: 16, cell: 26, tool: '#',
         grid: [], spawn: [2, 13],
-        chests: [], doors: [], platforms: [], hazards: []
+        chests: [], doors: [], platforms: [], hazards: [], enemies: [], cannons: [], flag: null
       };
 
       const canvas = document.getElementById('grid');
@@ -280,6 +314,14 @@
             ctx.moveTo(x + s * 0.3, y + s * 0.18); ctx.lineTo(x + s * 0.62, y + s * 0.3); ctx.lineTo(x + s * 0.3, y + s * 0.42); ctx.fill(); break;
           case 'C':
             fillCell(x, y, s, 'rgba(242,168,59,0.25)', PALETTE.amber); glyph(x, y, s, 'C', PALETTE.amber); break;
+          case '*':
+            fillCell(x, y, s, 'rgba(242,168,59,0.2)', PALETTE.amber); glyph(x, y, s, '★', PALETTE.amber); break;
+          case 'H':
+            fillCell(x, y, s, 'rgba(61,191,168,0.2)', PALETTE.teal); glyph(x, y, s, 'Щ', PALETTE.teal); break;
+          case 'W':
+            fillCell(x, y, s, 'rgba(232,236,244,0.16)', PALETTE.chalk); glyph(x, y, s, 'W', PALETTE.chalk); break;
+          case 'x':
+            fillCell(x, y, s, 'rgba(201,162,74,0.16)', '#c9a24a'); glyph(x, y, s, '▚', '#c9a24a'); break;
           case 'D': {
             const door = state.doors[entityAt(state.doors, c, r)];
             const col = door ? (KEY_COLOR[door.keyColor] ?? PALETTE.chalk) : PALETTE.chalk;
@@ -318,6 +360,21 @@
         };
         for (const p of state.platforms) line(p.from, p.to, PALETTE.teal);
         for (const h of state.hazards) line(h.from, h.to, PALETTE.coral);
+        for (const e of state.enemies) line(e.from, e.to, e.kind === 'flyer' ? '#9e73ee' : '#8a5a3b');
+        for (const c of state.cannons) { // пушка — квадрат со стрелкой направления
+          const px = c.at[0] * s + s / 2, py = c.at[1] * s + s / 2;
+          ctx.fillStyle = '#3a4260'; ctx.fillRect(px - s * 0.3, py - s * 0.3, s * 0.6, s * 0.6);
+          ctx.strokeStyle = PALETTE.coral; ctx.lineWidth = 2; ctx.beginPath();
+          ctx.moveTo(px, py); ctx.lineTo(px + (c.dir || 0) * s * 0.4, py + (c.diry || 0) * s * 0.4); ctx.stroke();
+        }
+        if (state.flag) { // столб флага
+          const fx = state.flag.at[0] * s + s / 2, fy = state.flag.at[1] * s + s / 2;
+          const top = fy - (state.flag.height ?? 6) * s;
+          ctx.strokeStyle = PALETTE.chalk; ctx.lineWidth = 3; ctx.beginPath();
+          ctx.moveTo(fx, top); ctx.lineTo(fx, fy + s / 2); ctx.stroke();
+          ctx.fillStyle = PALETTE.coral; ctx.beginPath();
+          ctx.moveTo(fx, top); ctx.lineTo(fx + s * 0.6, top + s * 0.25); ctx.lineTo(fx, top + s * 0.5); ctx.fill();
+        }
       }
 
       function drawGridLines(s) {
@@ -369,6 +426,23 @@
           b.addEventListener('click', () => { state.hazards.splice(i, 1); renderLists(); draw(); });
           row.append(b); hl.append(row);
         });
+        const el = $('enemyList'); el.replaceChildren();
+        state.enemies.forEach((e, i) => {
+          const row = document.createElement('div'); row.className = 'item';
+          row.innerHTML = `<span>[${e.from}]→[${e.to}] ${e.speed}px/с ${e.kind}</span>`;
+          const b = document.createElement('button'); b.textContent = '×';
+          b.addEventListener('click', () => { state.enemies.splice(i, 1); renderLists(); draw(); });
+          row.append(b); el.append(row);
+        });
+        const cl = $('cannonList'); cl.replaceChildren();
+        state.cannons.forEach((c, i) => {
+          const row = document.createElement('div'); row.className = 'item';
+          row.innerHTML = `<span>[${c.at}] dir ${c.dir}/${c.diry} ${c.speed}px/с и${c.interval} ${c.kind}</span>`;
+          const b = document.createElement('button'); b.textContent = '×';
+          b.addEventListener('click', () => { state.cannons.splice(i, 1); renderLists(); draw(); });
+          row.append(b); cl.append(row);
+        });
+        $('flagInfo').textContent = state.flag ? `флаг на [${state.flag.at}], высота ${state.flag.height ?? 6}` : 'нет флага';
       }
 
       // --- Сборка объекта уровня ---
@@ -384,8 +458,11 @@
           chests: state.chests,
           doors: state.doors,
           platforms: state.platforms,
-          hazards: state.hazards
+          hazards: state.hazards,
+          enemies: state.enemies,
+          cannons: state.cannons
         };
+        if (state.flag) level.flag = state.flag;
         return level;
       }
 
@@ -435,6 +512,9 @@
         state.doors = (data.doors ?? []).map((d) => ({ ...d, exit: Boolean(d.exit) }));
         state.platforms = (data.platforms ?? []).map((p) => ({ ...p }));
         state.hazards = (data.hazards ?? []).map((h) => ({ ...h }));
+        state.enemies = (data.enemies ?? []).map((e) => ({ ...e }));
+        state.cannons = (data.cannons ?? []).map((c) => ({ ...c }));
+        state.flag = data.flag ? { ...data.flag } : null;
         $('lvlId').value = data.id ?? 'new';
         $('lvlTitle').value = data.title ?? '';
         $('lvlLives').value = data.lives ?? 3;
@@ -451,8 +531,13 @@
         state.grid = g; state.cols = w; state.rows = h;
         // Сущности за пределами новой карты убираем.
         const inside = (e) => e.at[0] < w && e.at[1] < h;
+        const insidePath = (e) => e.from[0] < w && e.from[1] < h && e.to[0] < w && e.to[1] < h;
         state.chests = state.chests.filter(inside);
         state.doors = state.doors.filter(inside);
+        state.enemies = state.enemies.filter(insidePath);
+        state.cannons = state.cannons.filter(inside);
+        if (state.flag && !inside(state.flag)) state.flag = null;
+        renderLists();
         draw();
       }
 
@@ -489,6 +574,24 @@
         if (mode === 'fall') h.phase = Number($('hphase').value);
         state.hazards.push(h); renderLists(); draw();
       });
+      $('addEnemy').addEventListener('click', () => {
+        state.enemies.push({ from: [Number($('efx').value), Number($('efy').value)],
+          to: [Number($('etx').value), Number($('ety').value)],
+          speed: Number($('espeed').value), kind: $('ekind').value });
+        renderLists(); draw(); autosave();
+      });
+      $('addCannon').addEventListener('click', () => {
+        state.cannons.push({ at: [Number($('canx').value), Number($('cany').value)],
+          dir: Number($('candir').value), diry: Number($('candiry').value),
+          speed: Number($('canspeed').value), interval: Number($('canint').value),
+          phase: Number($('canphase').value), kind: $('cankind').value });
+        renderLists(); draw(); autosave();
+      });
+      $('setFlag').addEventListener('click', () => {
+        state.flag = { at: [Number($('flagx').value), Number($('flagy').value)], height: Number($('flagh').value) || 6 };
+        renderLists(); draw(); autosave();
+      });
+      $('clearFlag').addEventListener('click', () => { state.flag = null; renderLists(); draw(); autosave(); });
 
       // Автосохранение рабочей карты. Чтобы переход в «Тест» и обратно не терял
       // нарисованное: пишем при изменениях, читаем при загрузке.

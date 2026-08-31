@@ -44,6 +44,24 @@ export function createPop() {
     }
   }
 
+  // Лёгкая искра — для монет и усилений: несколько мелких осколков, без кольца.
+  function sparkle(x, y, color = PALETTE.amber) {
+    for (let i = 0; i < 6; i++) {
+      const angle = Math.random() * Math.PI * 2;
+      const speed = 120 * (0.4 + Math.random() * 0.8);
+      const lifetime = 0.35 * (0.6 + Math.random() * 0.6);
+      shards.push({
+        x, y,
+        velocityX: Math.cos(angle) * speed,
+        velocityY: Math.sin(angle) * speed - 40,
+        size: 2 + Math.random() * 2,
+        angle: Math.random() * Math.PI,
+        spin: (Math.random() - 0.5) * 10,
+        life: lifetime, maxLife: lifetime, color
+      });
+    }
+  }
+
   function update(dt) {
     if (ring) {
       ring.life -= dt;
@@ -67,6 +85,7 @@ export function createPop() {
 
   return {
     burst,
+    sparkle,
     update,
     shards,
     get ring() {

@@ -121,6 +121,7 @@ export function createSession({ level, tasks, modal, hud, pop, input, audio, ski
       case 'coin':
         run.coins += 1;
         audio.play('coin');
+        if (!prefersReducedMotion()) pop.sparkle(event.coin.x + event.coin.width / 2, event.coin.y + event.coin.height / 2);
         break;
 
       case 'checkpoint':
@@ -160,6 +161,7 @@ export function createSession({ level, tasks, modal, hud, pop, input, audio, ski
         else if (event.kind === 'shield') player.hasShield = true;
         else if (event.kind === 'wing') { player.doubleJumpTimer = WING_TIME; player.airJumpUsed = false; }
         audio.play('key');
+        if (!prefersReducedMotion()) pop.sparkle(player.x + player.width / 2, player.y + player.height / 2);
         break;
 
       case 'stomp':
