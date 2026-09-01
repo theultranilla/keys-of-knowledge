@@ -64,6 +64,7 @@ export function createDungeonSession({ input, audio, save, canvas, modal, tasks,
 
   let floor, current;
   newFloor(1);
+  audio?.startMusic?.(); // фоновый эмбиент — только в данже, гаснет при выходе
 
   function newFloor(n) {
     floor = generateFloor(n);
@@ -551,6 +552,7 @@ export function createDungeonSession({ input, audio, save, canvas, modal, tasks,
     update, render,
     setSkin(next) { skin = next; },
     destroy() {
+      audio?.stopMusic?.();
       touch.destroy();
       canvas.removeEventListener('pointermove', onMove);
       canvas.removeEventListener('pointerdown', onDown);

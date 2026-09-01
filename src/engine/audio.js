@@ -112,6 +112,51 @@ export function createAudio(settings = { sound: true }) {
     }
   };
 
+  // --- Фоновая музыка данжа ---
+  // Не монотонный гул, а медленная аккордовая прогрессия мягкими синусами (пад).
+  // Числа — ноты в Гц; прогрессия минорная и спокойная, подходит подземелью.
+  const CHORDS = [
+    [220, 262, 330], // Am
+    [175, 220, 262], // F
+    [196, 247, 294], // G
+    [165, 196, 247]  // Em
+  ];
+  const CHORD_MS = 3600;
+  let musicOn = false, musicTimer = null, chordStep = 0;
+
+  // Мягкий пад: плавная атака и спад, чтобы аккорд «дышал», а не щёлкал.
+  function pad(freq, dur, gain) {
+    const start = ctx.currentTime;
+    const osc = ctx.createOscillator();
+    const env = ctx.createGain();
+    osc.type = 'sine';
+    osc.frequency.value = freq;
+    env.gain.setValueAtTime(0.0001, start);
+    env.gain.exponentialRampToValueAtTime(gain, start + 0.9);      // медленная атака
+    env.gain.exponentialRampToValueAtTime(0.0001, start + dur);    // долгий спад
+    osc.connect(env); env.connect(master);
+    osc.start(start); osc.stop(start + dur + 0.05);
+  }
+
+  function musicTick() {
+    if (!musicOn || !ctx || !enabled.music) { musicOn = false; return; }
+    for (const f of CHORDS[chordStep % CHORDS.length]) pad(f, 4, 0.05);
+    chordStep++;
+    musicTimer = setTimeout(musicTick, CHORD_MS);
+  }
+
+  function startMusic() {
+    if (musicOn || !ctx || !enabled.music) return;
+    musicOn = true;
+    chordStep = 0;
+    musicTick();
+  }
+
+  function stopMusic() {
+    musicOn = false;
+    if (musicTimer) { clearTimeout(musicTimer); musicTimer = null; }
+  }
+
   return {
     unlock,
 
@@ -119,8 +164,12 @@ export function createAudio(settings = { sound: true }) {
       voices[name]?.();
     },
 
+    startMusic,
+    stopMusic,
+
     setSetting(name, value) {
       enabled[name] = value;
+      if (name === 'music' && !value) stopMusic(); // выключил музыку — гасим сразу
     },
 
     get started() {
