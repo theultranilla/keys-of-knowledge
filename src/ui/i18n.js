@@ -107,7 +107,8 @@ const ru = {
   'dungeon.buy': 'Купить: {label} · {cost}',
   'dungeon.descend': 'Вниз',
   'dungeon.altar': 'Жертва: −1 макс.HP → +урон',
-  'dungeon.rest': 'Отдохнуть (+HP)'
+  'dungeon.rest': 'Отдохнуть (+HP)',
+  'dungeon.gamble': 'Испытать удачу (−8 монет)'
 };
 
 // Похвалы за верный ответ — пул, из которого берём случайную, чтобы не приедалось.

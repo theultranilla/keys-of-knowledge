@@ -8,7 +8,7 @@ import { t } from '../ui/i18n.js';
 
 const MINI_KIND = {
   start: '#5ac888', combat: '#96a0be', boss: '#e05a67', treasure: '#f6d24d', shop: '#9e73ee',
-  shrine: '#c9c24a', heal: '#5ad0a0'
+  shrine: '#c9c24a', heal: '#5ad0a0', gamble: '#b98cf0'
 };
 
 export function drawMinimap(ctx, floor, current) {

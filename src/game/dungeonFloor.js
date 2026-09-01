@@ -24,7 +24,8 @@ const FLOOR_TINT = {
   shop: '#2c2044',
   boss: '#3a1f2b',
   shrine: '#2c2c1a',
-  heal: '#1f3a2e'
+  heal: '#1f3a2e',
+  gamble: '#2a1a2c'
 };
 
 // Биомы по глубине: пещеры → лёд → жар → бездна. Меняют цвет пола обычных комнат,
@@ -80,6 +81,7 @@ export function generateFloor(floorNumber, roomCount = 9) {
   if (rest[1]) kindOf.set(key(rest[1].x, rest[1].y), 'shop');
   if (rest[2] && Math.random() < 0.6) kindOf.set(key(rest[2].x, rest[2].y), 'shrine');
   if (rest[3] && Math.random() < 0.6) kindOf.set(key(rest[3].x, rest[3].y), 'heal');
+  if (rest[4] && Math.random() < 0.5) kindOf.set(key(rest[4].x, rest[4].y), 'gamble');
 
   const rooms = order.map((c, i) => ({
     cell: c,
@@ -254,6 +256,15 @@ export function drawRooms(ctx, floor) {
       ctx.fillStyle = PALETTE.amber;
       ctx.beginPath(); ctx.moveTo(f.x, f.y - 6); ctx.lineTo(f.x + 5, f.y + 8); ctx.lineTo(f.x - 5, f.y + 8); ctx.closePath(); ctx.fill();
     }
+    if (room.gamble && !room.gamble.used) {
+      const g = room.gamble;
+      ctx.fillStyle = '#9e73ee';
+      ctx.fillRect(g.x - 16, g.y - 16, 32, 32);        // тумба-автомат
+      ctx.fillStyle = '#15151f';
+      ctx.font = 'bold 22px sans-serif'; ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
+      ctx.fillText('?', g.x, g.y + 1);
+      ctx.textAlign = 'left'; ctx.textBaseline = 'alphabetic';
+    }
   }
 
   // портал (за боссом)
@@ -287,6 +298,7 @@ export function spawnAltars(floor) {
   for (const room of floor.rooms) {
     if (room.kind === 'shrine') room.altar = { x: room.cx, y: room.cy - 10, used: false };
     if (room.kind === 'heal') room.campfire = { x: room.cx, y: room.cy - 4, used: false };
+    if (room.kind === 'gamble') room.gamble = { x: room.cx, y: room.cy - 6, used: false };
   }
 }
 

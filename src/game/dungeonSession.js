@@ -24,6 +24,7 @@ const COINS_PER_FLOOR = 4; // монет в кошелёк за спуск с э
 const NOVA_FX_TIME = 0.4, NOVA_RADIUS = 260; // ударная волна «Новы»: длительность и радиус
 const DASH_SPEED = 620, DASH_TIME = 0.16, DASH_CD = 0.7; // рывок: скорость, длительность (=окно неуязвимости), кулдаун
 const INTERACT_R = 42; // дальность контекстного взаимодействия (E / тач-кнопка)
+const GAMBLE_BET = 8;  // ставка в комнате-казино
 
 export function createDungeonSession({ input, audio, save, canvas, modal, tasks, onDeath, upgrades }) {
   // Постоянные улучшения из хаба — прибавка к стартовым характеристикам.
@@ -314,6 +315,7 @@ export function createDungeonSession({ input, audio, save, canvas, modal, tasks,
     }
     if (current.altar && !current.altar.used) { const d = near(current.altar.x, current.altar.y); if (d >= 0) { best = { type: 'altar', target: current.altar }; bestD = d; } }
     if (current.campfire && !current.campfire.used) { const d = near(current.campfire.x, current.campfire.y); if (d >= 0) { best = { type: 'heal', target: current.campfire }; bestD = d; } }
+    if (current.gamble && !current.gamble.used) { const d = near(current.gamble.x, current.gamble.y); if (d >= 0) { best = { type: 'gamble', target: current.gamble }; bestD = d; } }
     if (current.portal) { const d = near(current.portal.x, current.portal.y); if (d >= 0) best = { type: 'portal', target: current.portal }; }
     focus = best;
   }
@@ -324,7 +326,19 @@ export function createDungeonSession({ input, audio, save, canvas, modal, tasks,
     else if (f.type === 'shop') buyStand(f.target);
     else if (f.type === 'altar') useAltar(f.target);
     else if (f.type === 'heal') useCampfire(f.target);
+    else if (f.type === 'gamble') resolveGamble(f.target);
     else if (f.type === 'portal') descend();
+  }
+
+  // Казино: ставка GAMBLE_BET монет — 45% крупный выигрыш, 27% заряд «Новы», иначе пусто.
+  function resolveGamble(g) {
+    if (g.used || player.coins < GAMBLE_BET) return;
+    g.used = true;
+    player.coins -= GAMBLE_BET;
+    const r = Math.random();
+    if (r < 0.45) { player.coins += GAMBLE_BET * 3; audio?.play?.('key'); addShake(4); }
+    else if (r < 0.72) { player.bombs += 1; audio?.play?.('key'); }
+    else { audio?.play?.('wrong'); }
   }
 
   // Алтарь: раз за забег — минус 1 к макс. HP за +0.4 к урону (не ниже 2 HP).
@@ -444,6 +458,7 @@ export function createDungeonSession({ input, audio, save, canvas, modal, tasks,
     if (focus.type === 'shop') return t('dungeon.buy', { label: focus.target.label, cost: focus.target.cost });
     if (focus.type === 'altar') return t('dungeon.altar');
     if (focus.type === 'heal') return t('dungeon.rest');
+    if (focus.type === 'gamble') return t('dungeon.gamble');
     if (focus.type === 'portal') return t('dungeon.descend');
     return null;
   }
