@@ -15,7 +15,9 @@ export const WEAPONS = {
   heavy:  { name: 'Тяжёлая',    fireCd: 0.5,  dmg: 3,   pellets: 1, spread: 0,    speed: 480, r: 9, life: 1.3 }
 };
 export const WEAPON_DROPS = ['spread', 'rapid', 'heavy']; // что может выпасть (кроме стартовой «Искры»)
-const ENEMY_SPEED = 95, ENEMY_HP = 3, ENEMY_R = 15, HIT_FLASH = 0.08, CONTACT_DMG = 1;
+const ENEMY_SPEED = 95, ENEMY_HP = 4, ENEMY_R = 15, HIT_FLASH = 0.08, CONTACT_DMG = 1;
+// Комнаты чистятся волнами — так бой длится не 5 секунд, а с минуту.
+const WAVE_CAP = 9;
 const BOSS_R = 30, BOSS_SPEED = 60, BOSS_BURST_CD = 2.2, BOSS_BURST_N = 10;
 // Босс-таранщик: подбирается, телеграфирует, делает быстрый рывок в игрока.
 const CHARGE_CD = 1.4, CHARGE_WIND = 0.5, CHARGE_DASH = 0.45, CHARGE_SPEED = 360;
@@ -38,7 +40,7 @@ const NOVA_DMG = 6, NOVA_KB = 420;
 // Кривая сложности по этажам (подобрано на ощупь, крутится безопасно). Этаж 1 —
 // нулевая надбавка: раннее прохождение остаётся мягким.
 const ENEMY_CAP = 12;                       // потолок числа врагов в комнате
-const RAMP_HP = 0.12;                       // +12% HP за каждый этаж после первого
+const RAMP_HP = 0.14;                       // +14% HP за каждый этаж после первого
 const RAMP_SPEED = 0.04, SPEED_CAP = 1.4;   // прирост скорости и его потолок
 // Элитные враги: редкие крупные с этажа 3, крепче и медленнее, роняют монету.
 const ELITE_FLOOR = 3, ELITE_CHANCE = 0.12;
@@ -69,11 +71,9 @@ export function createCombat({ audio, hitPlayer, onClear, onEnemyHit }) {
       }
       return;
     }
-    const n = Math.min(ENEMY_CAP, 4 + floorNumber); // с потолком, иначе глубокие этажи — каша
-    for (let i = 0; i < n; i++) {
-      const elite = floorNumber >= ELITE_FLOOR && Math.random() < ELITE_CHANCE;
-      room.enemies.push(makeEnemy(rand(it.x0 + 30, it.x1 - 30), rand(it.y0 + 30, it.y1 - 30), pickKind(floorNumber), floorNumber, elite));
-    }
+    // Обычная боевая — волнами: первая при входе, следующие по мере зачистки.
+    room.wavesLeft = floorNumber >= 6 ? 2 : 1; // столько ДОПОЛНИТЕЛЬНЫХ волн
+    spawnWave(room, floorNumber);
   }
 
   function fire(cx, cy, aim, weaponId) {
@@ -235,7 +235,10 @@ export function createCombat({ audio, hitPlayer, onClear, onEnemyHit }) {
       if (e.kind === 'bomber' && !e.exploded && d < e.r + half + 12) { explode(e); e.hp = 0; }
       if (d < e.r + half && hitPlayer(CONTACT_DMG)) return;
     }
-    if (current.enemies.length === 0) { current.cleared = true; current.doorsClosed = false; onClear(current); }
+    if (current.enemies.length === 0) {
+      if (current.wavesLeft > 0) { current.wavesLeft -= 1; spawnWave(current, floor.floorNumber); } // следующая волна
+      else { current.cleared = true; current.doorsClosed = false; onClear(current); }
+    }
   }
 
   function draw(ctx, current) {
@@ -281,6 +284,16 @@ export function createCombat({ audio, hitPlayer, onClear, onEnemyHit }) {
   return { reset, spawnEnemies, fire, nova, update, draw };
 }
 
+// Одна волна врагов в комнату: число растёт с этажом, с потолком WAVE_CAP.
+function spawnWave(room, floorNumber) {
+  const it = roomInterior(room);
+  const n = Math.min(WAVE_CAP, 3 + Math.floor(floorNumber * 0.5));
+  for (let i = 0; i < n; i++) {
+    const elite = floorNumber >= ELITE_FLOOR && Math.random() < ELITE_CHANCE;
+    room.enemies.push(makeEnemy(rand(it.x0 + 30, it.x1 - 30), rand(it.y0 + 30, it.y1 - 30), pickKind(floorNumber), floorNumber, elite));
+  }
+}
+
 // Глубже — меньше простых преследователей, больше стрелков/танков и особых видов
 // (бомбер с 3-го, сплиттер с 4-го, лекарь с 5-го этажа).
 function pickKind(floorNumber) {
@@ -300,7 +313,7 @@ function pickKind(floorNumber) {
 function makeEnemy(x, y, kind, floorNumber, elite = false, variant = 'gunner') {
   // Босс живёт по своей формуле HP и не попадает под общий множитель этажа.
   if (kind === 'boss') {
-    const hp = ENEMY_HP * 6 + floorNumber * 4;
+    const hp = ENEMY_HP * 7 + floorNumber * 6; // толще: за пол-минуты не свалить
     return {
       x, y, r: BOSS_R, hp, maxHp: hp, speed: BOSS_SPEED, kind, variant, elite: false, enraged: false, hitFlash: 0,
       knockX: 0, knockY: 0, swirl: Math.random() < 0.5 ? 1 : -1, fireCd: 0, burstCd: BOSS_BURST_CD, burstAngle: 0,
@@ -308,7 +321,7 @@ function makeEnemy(x, y, kind, floorNumber, elite = false, variant = 'gunner') {
     };
   }
   let r = ENEMY_R, hp = ENEMY_HP, speed = ENEMY_SPEED;
-  if (kind === 'shooter') { r = 14; hp = 2; speed = SHOOTER_SPEED; }
+  if (kind === 'shooter') { r = 14; hp = 3; speed = SHOOTER_SPEED; }
   else if (kind === 'tank') { r = TANK_R; hp = TANK_HP; speed = TANK_SPEED; }
   else if (kind === 'bomber') { r = 15; hp = 3; speed = 120; }   // быстрый смертник
   else if (kind === 'splitter') { r = 18; hp = 5; speed = 80; }  // делится при смерти
