@@ -33,7 +33,7 @@
     "########################################"
   ],
   "chests": [
-    { "at": [12, 12], "subject": "geometry", "grade": 6, "difficulty": 2, "keyColor": "teal" }
+    { "at": [12, 12], "subject": "math", "grade": 3, "difficulty": 2, "keyColor": "teal" }
   ],
   "doors": [
     { "at": [34, 12], "keyColor": "teal", "exit": true }

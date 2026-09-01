@@ -37,9 +37,9 @@
     "#########################....###########################################"
   ],
   "chests": [
-    { "at": [6, 17], "subject": "algebra", "grade": 5, "difficulty": 1, "keyColor": "amber" },
-    { "at": [24, 17], "subject": "geometry", "grade": 6, "difficulty": 2, "keyColor": "teal" },
-    { "at": [46, 17], "subject": "physics", "grade": 7, "difficulty": 2, "keyColor": "coral" }
+    { "at": [6, 17], "subject": "math", "grade": 2, "difficulty": 1, "keyColor": "amber" },
+    { "at": [24, 17], "subject": "math", "grade": 3, "difficulty": 2, "keyColor": "teal" },
+    { "at": [46, 17], "subject": "physics", "grade": 4, "difficulty": 2, "keyColor": "coral" }
   ],
   "doors": [
     { "at": [18, 17], "keyColor": "amber", "exit": false },

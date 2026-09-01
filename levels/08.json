@@ -33,7 +33,7 @@
     "########################################"
   ],
   "chests": [
-    { "at": [12, 12], "subject": "algebra", "grade": 5, "difficulty": 1, "keyColor": "amber" }
+    { "at": [12, 12], "subject": "math", "grade": 2, "difficulty": 1, "keyColor": "amber" }
   ],
   "doors": [
     { "at": [37, 12], "keyColor": "amber", "exit": true }

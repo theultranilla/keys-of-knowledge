@@ -51,7 +51,7 @@
     "######################"
   ],
   "chests": [
-    { "at": [12, 9], "subject": "physics", "grade": 6, "difficulty": 1, "keyColor": "teal" }
+    { "at": [12, 9], "subject": "physics", "grade": 3, "difficulty": 1, "keyColor": "teal" }
   ],
   "doors": [
     { "at": [16, 9], "keyColor": "teal", "exit": true }

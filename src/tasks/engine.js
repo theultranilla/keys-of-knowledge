@@ -1,6 +1,5 @@
 import { createRng, hashSeed } from './rng.js';
-import { algebraTasks } from './algebra.js';
-import { geometryTasks } from './geometry.js';
+import { mathTasks } from './math.js';
 import { physicsTasks } from './physics.js';
 
 // Движок задач: выбирает генератор под запрос уровня, разворачивает его в
@@ -9,7 +8,7 @@ import { physicsTasks } from './physics.js';
 // Про интерфейс он ничего не знает — ни про DOM, ни про canvas. Поэтому его
 // целиком можно прогнать скриптом, что и делает scripts/verify-tasks.mjs.
 
-export const ALL_GENERATORS = [...algebraTasks, ...geometryTasks, ...physicsTasks];
+export const ALL_GENERATORS = [...mathTasks, ...physicsTasks];
 
 export const MAX_ATTEMPTS = 3;
 

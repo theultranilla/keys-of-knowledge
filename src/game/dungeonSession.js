@@ -389,7 +389,7 @@ export function createDungeonSession({ input, audio, save, canvas, modal, tasks,
     if (busy) return;
     busy = true;
     input.releaseAll();
-    const grade = Math.min(5 + (floor.floorNumber - 1), 7);
+    const grade = Math.min(5, floor.floorNumber); // аудитория 1–5 классов: этаж = класс, с потолком 5
     const difficulty = Math.min(floor.floorNumber, 3);
     const task = tasks.createTask({ subject: ch.subject, grade, difficulty },
       `dungeon-f${floor.floorNumber}-r${current.index}-${ch.subject}`);

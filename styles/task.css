@@ -168,6 +168,13 @@
   color: var(--coral);
 }
 
+/* Класс .task__note задаёт display:flex и по специфичности равен голому [hidden]
+   из UA-стиля, а авторское правило бьёт браузерное — поэтому hidden сам по себе
+   заметку не прятал, и подсказка от прошлой задачи оставалась висеть. */
+.task__note[hidden] {
+  display: none;
+}
+
 .task__note {
   display: flex;
   flex-direction: column;

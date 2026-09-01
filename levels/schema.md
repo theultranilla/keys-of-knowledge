@@ -58,13 +58,13 @@
 ## Сундуки
 
 ```json
-{ "at": [32, 15], "subject": "algebra", "grade": 5, "difficulty": 1, "keyColor": "amber" }
+{ "at": [32, 15], "subject": "math", "grade": 2, "difficulty": 1, "keyColor": "amber" }
 ```
 
 | Поле | Что значит |
 |---|---|
 | `at` | `[колонка, строка]`. Должно совпадать с тайлом `chest` на карте |
-| `subject` | `"algebra"`, `"geometry"` или `"physics"` — из какого раздела задача |
+| `subject` | `"math"` или `"physics"` — из какого раздела задача |
 | `grade` | Класс, на который рассчитана задача: 5, 6 или 7 |
 | `difficulty` | Сложность 1–3 |
 | `keyColor` | Цвет ключа, который выдаст сундук |

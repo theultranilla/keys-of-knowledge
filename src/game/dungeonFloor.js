@@ -278,9 +278,9 @@ export function drawRooms(ctx, floor) {
 
 // --- сундуки-выбор: предмет → тип награды ---
 const SUBJECTS = [
-  { subject: 'algebra', reward: 'damage', color: '#f2c14b', label: 'А' }, // урон
-  { subject: 'geometry', reward: 'maxhp', color: '#5ea0ff', label: 'Г' }, // макс. HP
-  { subject: 'physics', reward: 'heal', color: '#e0645f', label: 'Ф' }    // лечение
+  { subject: 'math', reward: 'damage', color: '#f2c14b', label: 'М' },    // урон
+  { subject: 'physics', reward: 'maxhp', color: '#5ea0ff', label: 'Ф' },  // макс. HP
+  { subject: 'math', reward: 'heal', color: '#e0645f', label: 'М' }       // лечение
 ];
 
 export function spawnChests(floor) {

@@ -34,7 +34,7 @@
     "############################################"
   ],
   "chests": [
-    { "at": [5, 13], "subject": "algebra", "grade": 5, "difficulty": 1, "keyColor": "amber" }
+    { "at": [5, 13], "subject": "math", "grade": 2, "difficulty": 1, "keyColor": "amber" }
   ],
   "doors": [
     { "at": [40, 13], "keyColor": "amber", "exit": true }

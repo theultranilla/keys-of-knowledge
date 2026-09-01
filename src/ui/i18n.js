@@ -3,8 +3,7 @@
 // «дописать словарь», а не «искать текст по всем модулям».
 
 const ru = {
-  'task.title.algebra': 'Задача по алгебре',
-  'task.title.geometry': 'Задача по геометрии',
+  'task.title.math': 'Задача по математике',
   'task.title.physics': 'Задача по физике',
   'task.answer.label': 'Ответ',
   'task.check': 'Проверить',

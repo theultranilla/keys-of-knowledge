@@ -66,6 +66,10 @@ export function createTaskModal({ audio } = {}) {
       parts.input.value = '';
       parts.message.textContent = '';
       parts.message.className = 'task__message';
+      // Чистим не только видимость, но и текст: иначе заметка от прошлой задачи
+      // остаётся в DOM и может мелькнуть, пока новая ещё не заполнена.
+      parts.hint.replaceChildren();
+      parts.solution.replaceChildren();
       parts.hint.hidden = true;
       parts.solution.hidden = true;
       parts.check.hidden = false;
