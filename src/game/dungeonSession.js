@@ -473,7 +473,7 @@ export function createDungeonSession({ input, audio, save, canvas, modal, tasks,
     ctx.save();
     ctx.translate(-camX, -camY);
 
-    drawRooms(ctx, floor);
+    drawRooms(ctx, floor, time);
     drawTraps(ctx, current, time); // шипы под сущностями — по ним ходят
     combat.draw(ctx, current);
     drawSparks(ctx);

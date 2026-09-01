@@ -1,4 +1,5 @@
 import { TILE, PALETTE } from '../engine/constants.js';
+import { drawChest } from './dungeonSprites.js';
 
 // Раскладка этажа-подземелья: комнаты на сетке, соединённые дверями (как в Soul
 // Knight). Дерево комнат строится случайным обходом от старта. Геометрия комнаты —
@@ -179,7 +180,7 @@ export function allWalls(floor) {
   return rects;
 }
 
-export function drawRooms(ctx, floor) {
+export function drawRooms(ctx, floor, t = 0) {
   const biome = floor.biome ?? BIOMES[0];
   // пол: у обычных комнат — цвет биома, у особых — свой сигнальный тинт
   for (const room of floor.rooms) {
@@ -219,11 +220,7 @@ export function drawRooms(ctx, floor) {
   for (const room of floor.rooms) {
     if (room.chests) for (const ch of room.chests) {
       if (ch.opened) continue;
-      ctx.fillStyle = ch.color;
-      ctx.fillRect(ch.x - 14, ch.y - 14, 28, 28);
-      ctx.fillStyle = '#15151f';
-      ctx.font = 'bold 18px sans-serif';
-      ctx.fillText(ch.label, ch.x, ch.y + 1);
+      drawChest(ctx, ch, t); // рисованный сундук с самоцветом предмета
     }
     if (room.stands) for (const st of room.stands) {
       if (st.bought) continue;

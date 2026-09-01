@@ -1,5 +1,6 @@
 import { allWalls, roomInterior } from './dungeonFloor.js';
 import { PALETTE } from '../engine/constants.js';
+import { drawEnemy } from './dungeonSprites.js';
 
 // Бой данжа: враги трёх видов, снаряды игрока и врагов-стрелков. Владеет своими
 // массивами и обновляет их; про игрока/этаж/награды знает через параметры и колбэки
@@ -21,14 +22,10 @@ const WAVE_CAP = 9;
 const BOSS_R = 30, BOSS_SPEED = 60, BOSS_BURST_CD = 2.2, BOSS_BURST_N = 10;
 // Босс-таранщик: подбирается, телеграфирует, делает быстрый рывок в игрока.
 const CHARGE_CD = 1.4, CHARGE_WIND = 0.5, CHARGE_DASH = 0.45, CHARGE_SPEED = 360;
-const CHARGER_COLOR = '#d1552b';
 const SHOOTER_RANGE = 250, SHOOTER_FIRE_CD = 1.3, SHOOTER_SPEED = 70;
 const TANK_R = 26, TANK_HP = 9, TANK_SPEED = 45;
 const ESHOT_SPEED = 280, ESHOT_R = 6, ESHOT_LIFE = 2.4, ESHOT_DMG = 1;
-const ENEMY_COLOR = {
-  chaser: PALETTE.coral, shooter: '#f0a04b', tank: '#8a3a52', boss: '#b0343f',
-  bomber: '#e0902f', splitter: '#5ad06a', healer: '#dfa0d0'
-};
+// Цвета и форма врагов живут в dungeonSprites.js (модельки).
 // Бомбер взрывается кольцом пуль; лекарь лечит соседей.
 const BOMBER_SHOTS = 8, HEAL_CD = 2.4, HEAL_AMOUNT = 2, HEAL_RANGE = 220;
 // Отдача от попаданий: скорость толчка и затухание за кадр, плюс «масса» по типу
@@ -45,10 +42,11 @@ const RAMP_SPEED = 0.04, SPEED_CAP = 1.4;   // прирост скорости �
 // Элитные враги: редкие крупные с этажа 3, крепче и медленнее, роняют монету.
 const ELITE_FLOOR = 3, ELITE_CHANCE = 0.12;
 const ELITE_HP_MUL = 2.2, ELITE_R_MUL = 1.5, ELITE_SLOW = 0.85;
-const MINI_R = 24, MINI_COLOR = '#c77dff'; // мини-босс: между рядовым врагом и боссом этажа
+const MINI_R = 24; // мини-босс: радиус между рядовым врагом и боссом этажа (цвет — в sprites)
 
 export function createCombat({ audio, hitPlayer, onClear, onEnemyHit }) {
   const shots = [], eShots = [];
+  let animT = 0; // общий таймер анимации моделек (только рендер)
 
   function reset() { shots.length = 0; eShots.length = 0; }
 
@@ -168,6 +166,7 @@ export function createCombat({ audio, hitPlayer, onClear, onEnemyHit }) {
 
   // pc — центр игрока {x,y}; half — половина ширины игрока; dmgMul — множитель урона.
   function update(dt, floor, current, pc, dmgMul, half) {
+    animT += dt; // время только для анимации моделек, симуляции не касается
     const walls = allWalls(floor);
 
     for (let i = shots.length - 1; i >= 0; i--) {
@@ -207,6 +206,7 @@ export function createCombat({ audio, hitPlayer, onClear, onEnemyHit }) {
         current.enemies.splice(i, 1); audio?.play?.('enemyDie'); onEnemyHit?.(e.x, e.y, true, e.elite); continue;
       }
       const dx = pc.x - e.x, dy = pc.y - e.y, d = Math.hypot(dx, dy) || 1, nx = dx / d, ny = dy / d;
+      e.faceX = nx; e.faceY = ny; // куда смотреть глазами модельки
       if (e.kind === 'shooter') {
         if (d > SHOOTER_RANGE + 30) { e.x += nx * e.speed * dt; e.y += ny * e.speed * dt; }
         else if (d < SHOOTER_RANGE - 30) { e.x -= nx * e.speed * dt; e.y -= ny * e.speed * dt; }
@@ -242,39 +242,7 @@ export function createCombat({ audio, hitPlayer, onClear, onEnemyHit }) {
   }
 
   function draw(ctx, current) {
-    for (const e of current.enemies) {
-      const charger = e.kind === 'boss' && e.variant === 'charger';
-      let col = charger ? CHARGER_COLOR : (ENEMY_COLOR[e.kind] ?? PALETTE.coral);
-      if (e.mini) col = MINI_COLOR; // мини-босс — свой цвет
-      ctx.fillStyle = e.hitFlash > 0 ? '#ffffff' : col;
-      ctx.beginPath(); ctx.arc(e.x, e.y, e.r, 0, Math.PI * 2); ctx.fill();
-      if (e.elite) { // золотое кольцо — сразу видно, что враг опасный и с монетой
-        ctx.strokeStyle = '#f6d24d'; ctx.lineWidth = 3;
-        ctx.beginPath(); ctx.arc(e.x, e.y, e.r + 3, 0, Math.PI * 2); ctx.stroke();
-      }
-      if (charger && e.chargeState === 'wind') { // телеграф рывка — уходи вбок
-        ctx.strokeStyle = '#ffe08a'; ctx.lineWidth = 3;
-        ctx.beginPath(); ctx.arc(e.x, e.y, e.r + 5, 0, Math.PI * 2); ctx.stroke();
-      }
-      if (e.kind === 'boss' && e.enraged) { // ярость — красный ободок
-        ctx.strokeStyle = '#ff5a4b'; ctx.lineWidth = 3;
-        ctx.beginPath(); ctx.arc(e.x, e.y, e.r + 7, 0, Math.PI * 2); ctx.stroke();
-      }
-      if (e.kind === 'boss' && e.variant === 'gunner' && e.burstCd > 0 && e.burstCd < 0.28) { // телеграф залпа
-        ctx.strokeStyle = '#ffe08a'; ctx.lineWidth = 3;
-        ctx.beginPath(); ctx.arc(e.x, e.y, e.r + 4, 0, Math.PI * 2); ctx.stroke();
-      }
-      if (e.kind === 'bomber') { // ободок «вот-вот рванёт»
-        ctx.strokeStyle = '#ffcaa0'; ctx.lineWidth = 2;
-        ctx.beginPath(); ctx.arc(e.x, e.y, e.r + 3, 0, Math.PI * 2); ctx.stroke();
-      } else if (e.kind === 'splitter') { // шов посередине
-        ctx.strokeStyle = 'rgba(10,20,10,0.5)'; ctx.lineWidth = 2;
-        ctx.beginPath(); ctx.moveTo(e.x, e.y - e.r); ctx.lineTo(e.x, e.y + e.r); ctx.stroke();
-      } else if (e.kind === 'healer') { // белый крест
-        ctx.strokeStyle = '#fff'; ctx.lineWidth = 2.5;
-        ctx.beginPath(); ctx.moveTo(e.x - 5, e.y); ctx.lineTo(e.x + 5, e.y); ctx.moveTo(e.x, e.y - 5); ctx.lineTo(e.x, e.y + 5); ctx.stroke();
-      }
-    }
+    for (const e of current.enemies) drawEnemy(ctx, e, animT); // модельки живут в dungeonSprites
     ctx.fillStyle = '#ff8a4b';
     for (const s of eShots) { ctx.beginPath(); ctx.arc(s.x, s.y, ESHOT_R, 0, Math.PI * 2); ctx.fill(); }
     ctx.fillStyle = PALETTE.chalk;
