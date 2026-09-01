@@ -105,12 +105,17 @@ export function createCombat({ audio, hitPlayer, onClear, onEnemyHit }) {
   // залпом; таранщик (charger) подбирается, замирает-целится (телеграф) и делает
   // быстрый рывок в зафиксированную точку — уклоняться надо вбок, а не назад.
   function bossBehavior(e, dt, nx, ny) {
+    // Ярость: на половине HP босс разъяряется — атаки чаще, у стрелка добавляется
+    // прицельный залп. Переход один раз, с вспышкой.
+    if (!e.enraged && e.hp <= e.maxHp * 0.5) { e.enraged = true; e.hitFlash = HIT_FLASH; audio?.play?.('bossShot'); }
+    const rage = e.enraged ? 0.55 : 1; // множитель кулдаунов в ярости
+
     if (e.variant === 'charger') {
       e.chargeTimer -= dt;
       if (e.chargeState === 'dash') {
         e.x += e.chargeDir.x * CHARGE_SPEED * dt;
         e.y += e.chargeDir.y * CHARGE_SPEED * dt;
-        if (e.chargeTimer <= 0) { e.chargeState = 'idle'; e.chargeTimer = CHARGE_CD; }
+        if (e.chargeTimer <= 0) { e.chargeState = 'idle'; e.chargeTimer = CHARGE_CD * rage; }
       } else if (e.chargeState === 'wind') {
         // конец завода — фиксируем направление рывка на текущего игрока
         if (e.chargeTimer <= 0) { e.chargeState = 'dash'; e.chargeTimer = CHARGE_DASH; e.chargeDir = { x: nx, y: ny }; audio?.play?.('bossShot'); }
@@ -128,8 +133,15 @@ export function createCombat({ audio, hitPlayer, onClear, onEnemyHit }) {
         const a = (k / BOSS_BURST_N) * Math.PI * 2 + e.burstAngle;
         eShots.push({ x: e.x, y: e.y, vx: Math.cos(a) * ESHOT_SPEED, vy: Math.sin(a) * ESHOT_SPEED, life: ESHOT_LIFE });
       }
+      if (e.enraged) { // в ярости — вдобавок прицельный веер из трёх в игрока
+        const base = Math.atan2(ny, nx);
+        for (let k = -1; k <= 1; k++) {
+          const a = base + k * 0.18;
+          eShots.push({ x: e.x, y: e.y, vx: Math.cos(a) * ESHOT_SPEED * 1.2, vy: Math.sin(a) * ESHOT_SPEED * 1.2, life: ESHOT_LIFE });
+        }
+      }
       e.burstAngle += 0.4;
-      e.burstCd = BOSS_BURST_CD;
+      e.burstCd = BOSS_BURST_CD * rage;
       audio?.play?.('bossShot');
     }
   }
@@ -241,6 +253,14 @@ export function createCombat({ audio, hitPlayer, onClear, onEnemyHit }) {
         ctx.strokeStyle = '#ffe08a'; ctx.lineWidth = 3;
         ctx.beginPath(); ctx.arc(e.x, e.y, e.r + 5, 0, Math.PI * 2); ctx.stroke();
       }
+      if (e.kind === 'boss' && e.enraged) { // ярость — красный ободок
+        ctx.strokeStyle = '#ff5a4b'; ctx.lineWidth = 3;
+        ctx.beginPath(); ctx.arc(e.x, e.y, e.r + 7, 0, Math.PI * 2); ctx.stroke();
+      }
+      if (e.kind === 'boss' && e.variant === 'gunner' && e.burstCd > 0 && e.burstCd < 0.28) { // телеграф залпа
+        ctx.strokeStyle = '#ffe08a'; ctx.lineWidth = 3;
+        ctx.beginPath(); ctx.arc(e.x, e.y, e.r + 4, 0, Math.PI * 2); ctx.stroke();
+      }
       if (e.kind === 'bomber') { // ободок «вот-вот рванёт»
         ctx.strokeStyle = '#ffcaa0'; ctx.lineWidth = 2;
         ctx.beginPath(); ctx.arc(e.x, e.y, e.r + 3, 0, Math.PI * 2); ctx.stroke();
@@ -282,7 +302,7 @@ function makeEnemy(x, y, kind, floorNumber, elite = false, variant = 'gunner') {
   if (kind === 'boss') {
     const hp = ENEMY_HP * 6 + floorNumber * 4;
     return {
-      x, y, r: BOSS_R, hp, maxHp: hp, speed: BOSS_SPEED, kind, variant, elite: false, hitFlash: 0,
+      x, y, r: BOSS_R, hp, maxHp: hp, speed: BOSS_SPEED, kind, variant, elite: false, enraged: false, hitFlash: 0,
       knockX: 0, knockY: 0, swirl: Math.random() < 0.5 ? 1 : -1, fireCd: 0, burstCd: BOSS_BURST_CD, burstAngle: 0,
       chargeState: 'idle', chargeTimer: CHARGE_CD, chargeDir: { x: 0, y: 0 }
     };
