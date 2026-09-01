@@ -412,14 +412,28 @@ export function createDungeonSession({ input, audio, save, canvas, modal, tasks,
     const it = roomInterior(room), arr = [];
     const value = 2 + Math.floor(floor.floorNumber / 3); // монеты дороже с глубиной — под растущие цены
     const n = 3 + ((Math.random() * 3) | 0); // 3–5 монет
-    for (let i = 0; i < n; i++) arr.push({ x: rand(it.x0 + 40, it.x1 - 40), y: rand(it.y0 + 40, it.y1 - 40), kind: 'coin', value });
-    if (Math.random() < 0.4) arr.push({ x: rand(it.x0 + 40, it.x1 - 40), y: rand(it.y0 + 40, it.y1 - 40), kind: 'heal', value: 2 });
-    if (Math.random() < 0.18) arr.push({ x: rand(it.x0 + 40, it.x1 - 40), y: rand(it.y0 + 40, it.y1 - 40), kind: 'bomb', value: 1 });
+    for (let i = 0; i < n; i++) arr.push({ ...clearSpot(room, it), kind: 'coin', value });
+    if (Math.random() < 0.4) arr.push({ ...clearSpot(room, it), kind: 'heal', value: 2 });
+    if (Math.random() < 0.18) arr.push({ ...clearSpot(room, it), kind: 'bomb', value: 1 });
     if (Math.random() < 0.14) { // редкий дроп оружия (не совпадает с текущим)
       const opts = WEAPON_DROPS.filter((w) => w !== player.weapon);
-      arr.push({ x: rand(it.x0 + 40, it.x1 - 40), y: rand(it.y0 + 40, it.y1 - 40), kind: 'weapon', weaponId: opts[(Math.random() * opts.length) | 0] });
+      arr.push({ ...clearSpot(room, it), kind: 'weapon', weaponId: opts[(Math.random() * opts.length) | 0] });
     }
     return arr;
+  }
+
+  // Точка внутри комнаты, не попадающая в столбы-препятствия: иначе монета
+  // спавнилась прямо в укрытии и её было не достать. Центр комнаты всегда свободен
+  // (столбы стоят по углам) — на него и падаем, если за 20 попыток не нашли место.
+  function clearSpot(room, it, margin = 14) {
+    const obs = room.obstacles ?? [];
+    for (let tries = 0; tries < 20; tries++) {
+      const x = rand(it.x0 + 40, it.x1 - 40), y = rand(it.y0 + 40, it.y1 - 40);
+      const inside = obs.some((o) =>
+        x > o.x - margin && x < o.x + o.w + margin && y > o.y - margin && y < o.y + o.h + margin);
+      if (!inside) return { x, y };
+    }
+    return { x: (it.x0 + it.x1) / 2, y: (it.y0 + it.y1) / 2 };
   }
 
   function collectPickups() {

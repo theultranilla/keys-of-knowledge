@@ -153,6 +153,17 @@ export function createSave() {
       persist();
     },
 
+    // --- Туториал ---
+    hasSeenTutorial(mode) {
+      return Boolean(data.tutorial?.[mode]);
+    },
+
+    markTutorialSeen(mode) {
+      if (!data.tutorial) data.tutorial = {};
+      data.tutorial[mode] = true;
+      persist();
+    },
+
     // --- Гардероб ---
 
     // Монеты, доступные к трате: заработано минус потрачено.
@@ -236,9 +247,12 @@ function createDefaults() {
     player: { name: null, coinsTotal: 0, coinsSpent: 0 },
     levels: {},
     tasks: {},
-    settings: { sound: true, music: true, reducedMotion: false },
+    settings: { sound: true, music: true, volume: 1, reducedMotion: false, hints: true },
     wardrobe: { owned: [...FREE_ITEMS], equipped: { ...DEFAULT_SKIN } },
-    dungeon: { upgrades: {} }
+    dungeon: { upgrades: {} },
+    // Показан ли туториал каждого режима — чтобы при первом входе открыть его сам,
+    // а потом не мешать.
+    tutorial: { platformer: false, dungeon: false }
   };
 }
 
@@ -263,6 +277,8 @@ function migrate(raw) {
       equipped: { ...DEFAULT_SKIN, ...(raw.wardrobe?.equipped ?? {}) }
     },
     // Улучшения данжа появились позже — у старых сейвов их нет.
-    dungeon: { upgrades: { ...(raw.dungeon?.upgrades ?? {}) } }
+    dungeon: { upgrades: { ...(raw.dungeon?.upgrades ?? {}) } },
+    // Флаги туториала добавились позже: старым сейвам подставляем «ещё не видел».
+    tutorial: { ...fresh.tutorial, ...(raw.tutorial ?? {}) }
   };
 }

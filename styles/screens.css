@@ -229,6 +229,196 @@
   font-size: 17px;
 }
 
+/* Ползунок громкости — в одну строку с подписью. */
+.switch--slider .switch__label {
+  flex: 0 0 auto;
+}
+
+.slider__input {
+  flex: 1;
+  min-width: 80px;
+  margin-left: auto;
+  height: 26px;
+  accent-color: var(--teal);
+  cursor: pointer;
+}
+
+.slider__value {
+  flex: 0 0 auto;
+  min-width: 46px;
+  text-align: right;
+  font-variant-numeric: tabular-nums;
+  font-weight: 700;
+  color: var(--amber);
+}
+
+/* --- Главное меню: две карточки режимов --- */
+.menu-modes {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+  gap: 14px;
+}
+
+.mode-card {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 8px;
+  padding: 18px 16px;
+  border: 2px solid color-mix(in srgb, var(--chalk) 16%, transparent);
+  border-radius: 16px;
+  background: rgb(0 0 0 / 22%);
+}
+
+.mode-card__art {
+  width: 72px;
+  height: 72px;
+}
+
+.mode-card__name {
+  margin: 0;
+  font-family: var(--font-display);
+  font-size: 20px;
+  color: var(--chalk);
+}
+
+.mode-card__desc {
+  flex: 1;
+  margin: 0;
+  font-size: 14px;
+  line-height: 1.4;
+  color: color-mix(in srgb, var(--chalk) 65%, transparent);
+}
+
+.mode-card__actions {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  width: 100%;
+  margin-top: auto;
+}
+
+.menu-link {
+  padding: 6px;
+  border: none;
+  border-radius: 8px;
+  background: transparent;
+  color: var(--teal);
+  font-family: var(--font-text);
+  font-size: 14px;
+  font-weight: 600;
+  cursor: pointer;
+}
+
+.menu-link:hover {
+  text-decoration: underline;
+}
+
+.menu-link:focus-visible {
+  outline: 3px solid var(--amber);
+  outline-offset: 2px;
+}
+
+.menu-secondary {
+  display: flex;
+  gap: 10px;
+}
+
+.menu-secondary .screen__button {
+  flex: 1;
+}
+
+/* --- Экран «Как играть» --- */
+.howto {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+  text-align: left;
+}
+
+.howto__section {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.howto__cap {
+  margin: 0;
+  font-family: var(--font-display);
+  font-size: 15px;
+  color: color-mix(in srgb, var(--chalk) 75%, transparent);
+}
+
+.howto__goal {
+  margin: 0;
+  font-size: 16px;
+  line-height: 1.5;
+  color: var(--chalk);
+}
+
+.howto__controls {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.howto__row {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
+.howto__keys {
+  flex: 0 0 auto;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px;
+  min-width: 122px;
+}
+
+.kbd {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 26px;
+  height: 26px;
+  padding: 0 7px;
+  border: 1px solid color-mix(in srgb, var(--chalk) 35%, transparent);
+  border-bottom-width: 3px;
+  border-radius: 6px;
+  background: rgb(0 0 0 / 30%);
+  font-family: var(--font-mono);
+  font-size: 13px;
+  font-weight: 700;
+  color: var(--amber);
+}
+
+.howto__label {
+  font-size: 15px;
+  line-height: 1.35;
+  color: var(--chalk);
+}
+
+.howto__touch {
+  margin: 4px 0 0;
+  font-size: 13px;
+  color: color-mix(in srgb, var(--chalk) 60%, transparent);
+}
+
+.howto__tips {
+  margin: 0;
+  padding-left: 20px;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.howto__tip {
+  font-size: 14px;
+  line-height: 1.4;
+  color: color-mix(in srgb, var(--chalk) 80%, transparent);
+}
+
 .confirm {
   display: flex;
   flex-direction: column;

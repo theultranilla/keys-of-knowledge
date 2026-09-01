@@ -14,6 +14,9 @@ export function createAudio(settings = { sound: true }) {
   let ctx = null;
   let master = null;
   let enabled = { ...settings };
+  // Громкость 0..1 крутит мастер-гейн поверх базового MASTER_VOLUME. Хранится
+  // отдельно, чтобы применить и к контексту, который заведётся только позже.
+  let volume = typeof settings.volume === 'number' ? settings.volume : 1;
 
   // Первый жест пользователя — единственный момент, когда можно завести звук.
   function unlock() {
@@ -27,7 +30,7 @@ export function createAudio(settings = { sound: true }) {
 
     ctx = new AudioContextClass();
     master = ctx.createGain();
-    master.gain.value = MASTER_VOLUME;
+    master.gain.value = MASTER_VOLUME * volume;
     master.connect(ctx.destination);
   }
 
@@ -168,6 +171,11 @@ export function createAudio(settings = { sound: true }) {
     stopMusic,
 
     setSetting(name, value) {
+      if (name === 'volume') {
+        volume = value;
+        if (master) master.gain.value = MASTER_VOLUME * volume;
+        return;
+      }
       enabled[name] = value;
       if (name === 'music' && !value) stopMusic(); // выключил музыку — гасим сразу
     },

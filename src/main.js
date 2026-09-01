@@ -45,26 +45,39 @@ let session = null;
 let tasks = null;
 let currentLevelId = null;
 let isDungeon = false; // текущий режим: платформер или данж (у них разное тач-управление)
+let howtoCfg = null;   // что показать на экране «Как играть» (режим + откуда пришли)
+
+// Вход в режим: при самом первом разе сперва открываем туториал, дальше — сразу
+// в игру. Флаг «видел» помечаем один раз, чтобы больше не мешать.
+function enterMode(mode, proceed) {
+  if (save.hasSeenTutorial(mode)) { proceed(); return; }
+  save.markTutorialSeen(mode);
+  howtoCfg = { mode, firstRun: true, onStart: proceed };
+  state.go(SCENE.HOWTO);
+}
 
 const menu = createMenu({
   mount: document.body,
   save,
   levels,
   on: {
-    play: () => startLevel(nextPlayableId()),
-    dungeon: () => state.go(SCENE.DUNGEON_HUB),
+    play: () => enterMode('platformer', () => startLevel(nextPlayableId())),
+    dungeon: () => enterMode('dungeon', () => state.go(SCENE.DUNGEON_HUB)),
     startRun: () => startDungeon(),
     levels: () => state.go(SCENE.LEVELS),
     wardrobe: () => state.go(SCENE.WARDROBE),
     settings: () => state.go(SCENE.SETTINGS),
+    // Кнопка «Как играть» из меню — туториал без автостарта, назад в меню.
+    howto: (mode) => { howtoCfg = { mode, firstRun: false }; state.go(SCENE.HOWTO); },
     back: () => state.go(state.previous === SCENE.PAUSED ? SCENE.PAUSED : SCENE.MENU),
-    pick: (id) => startLevel(id),
+    pick: (id) => enterMode('platformer', () => startLevel(id)),
     // Надел вещь в гардеробе — сразу перекрашиваем героя в застывшей сцене за меню.
     skinChanged: (equipped) => session?.setSkin(equipped),
     setting: (name, value) => {
       save.setSetting(name, value);
       if (name === 'reducedMotion') setReducedMotionOverride(value);
-      else audio.setSetting(name, value);
+      else if (name === 'hints') applyHintVisibility();
+      else audio.setSetting(name, value); // sound, music, volume
     },
     reset: () => {
       save.reset();
@@ -154,13 +167,24 @@ function finishLevel(id, result) {
   state.go(SCENE.COMPLETE);
 }
 
+// Нижняя подсказка управления — только в платформере во время игры и если её не
+// выключили в настройках. В данже клавиши другие, а под меню она — лишний шум.
+function applyHintVisibility() {
+  const on = save.settings.hints && state.is(SCENE.PLAYING) && !isDungeon;
+  document.body.classList.toggle('hint-on', on);
+}
+
 function onSceneChange(scene) {
   if (scene !== SCENE.COMPLETE && scene !== SCENE.PAUSED && scene !== SCENE.DEFEAT) overlays.hide();
   touch.setPlaying(scene === SCENE.PLAYING, !isDungeon);
+  applyHintVisibility();
 
   switch (scene) {
     case SCENE.MENU:
       menu.showMain();
+      break;
+    case SCENE.HOWTO:
+      menu.showHowto(howtoCfg);
       break;
     case SCENE.LEVELS:
       menu.showLevels();

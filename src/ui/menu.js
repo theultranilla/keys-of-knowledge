@@ -1,8 +1,10 @@
 import { el, button } from './dom.js';
 import { t } from './i18n.js';
 import { drawCharacter } from '../engine/character.js';
+import { drawEnemy } from '../game/dungeonSprites.js';
 import { CATEGORIES, itemsByCategory } from '../game/skins.js';
 import { UPGRADES, upgradeCost } from '../game/dungeonUpgrades.js';
+import { buildTutorial } from './tutorial.js';
 
 // Главное меню, выбор уровня и настройки. Все три — один и тот же слой поверх
 // canvas, просто с разным содержимым: так между ними нельзя оказаться нигде.
@@ -34,17 +36,46 @@ export function createMenu({ mount, save, levels, on }) {
     return [
       el('h1', { class: 'screen__title', text: t('menu.title') }),
       el('p', { class: 'screen__subtitle', text: t('menu.subtitle') }),
-      el(
-        'div',
-        { class: 'screen__actions' },
-        button('screen__button screen__button--primary', t('menu.play'), on.play),
-        button('screen__button', t('menu.dungeon'), () => on.dungeon()),
-        button('screen__button', t('menu.levels'), () => on.levels()),
+      el('div', { class: 'menu-modes' },
+        // Марио-режим: превью — сам герой в текущем костюме.
+        el('div', { class: 'mode-card' },
+          el('div', { class: 'mode-card__art' }, characterCanvas(save.equipped, 72)),
+          el('h3', { class: 'mode-card__name', text: t('menu.mode.platformer.name') }),
+          el('p', { class: 'mode-card__desc', text: t('menu.mode.platformer.desc') }),
+          el('div', { class: 'mode-card__actions' },
+            button('screen__button screen__button--primary', t('menu.play'), on.play),
+            button('menu-link', t('menu.levels'), () => on.levels()),
+            button('menu-link', t('menu.howto'), () => on.howto('platformer')))),
+        // Данж: превью — один из врагов-моделек.
+        el('div', { class: 'mode-card' },
+          el('div', { class: 'mode-card__art' }, enemyCanvas('chaser', 72)),
+          el('h3', { class: 'mode-card__name', text: t('menu.mode.dungeon.name') }),
+          el('p', { class: 'mode-card__desc', text: t('menu.mode.dungeon.desc') }),
+          el('div', { class: 'mode-card__actions' },
+            button('screen__button screen__button--primary', t('menu.play'), () => on.dungeon()),
+            button('menu-link', t('menu.howto'), () => on.howto('dungeon'))))),
+      el('div', { class: 'menu-secondary' },
         button('screen__button', t('menu.wardrobe'), () => on.wardrobe()),
-        button('screen__button', t('menu.settings'), () => on.settings())
-      ),
+        button('screen__button', t('menu.settings'), () => on.settings())),
       warning()
     ];
+  }
+
+  // Экран «Как играть». cfg: { mode, firstRun, onStart }. При первом входе снизу
+  // «Начать!» (стартует режим), из меню — «Назад».
+  function howtoScreen(cfg) {
+    const action = cfg.firstRun
+      ? button('screen__button screen__button--primary', t('howto.start'), () => cfg.onStart?.())
+      : button('screen__button', t('menu.back'), () => on.back());
+    return [...buildTutorial(cfg.mode), action];
+  }
+
+  // Маленькое превью врага для карточки данжа (те же модельки, что в бою).
+  function enemyCanvas(kind, size) {
+    const canvas = el('canvas', { class: 'wardrobe__preview', width: size, height: size });
+    const ctx = canvas.getContext('2d');
+    drawEnemy(ctx, { x: size / 2, y: size * 0.54, r: size * 0.3, kind, faceX: 0.4, faceY: 0.2, hitFlash: 0 }, 0.6);
+    return canvas;
   }
 
   function levelsScreen() {
@@ -78,9 +109,13 @@ export function createMenu({ mount, save, levels, on }) {
   }
 
   function settingsScreen() {
-    const rows = ['sound', 'music', 'reducedMotion'].map((name) =>
-      toggle(name, save.settings[name], (value) => on.setting(name, value))
-    );
+    const rows = [
+      toggle('sound', save.settings.sound, (v) => on.setting('sound', v)),
+      toggle('music', save.settings.music, (v) => on.setting('music', v)),
+      slider('volume', save.settings.volume, (v) => on.setting('volume', v)),
+      toggle('reducedMotion', save.settings.reducedMotion, (v) => on.setting('reducedMotion', v)),
+      toggle('hints', save.settings.hints, (v) => on.setting('hints', v))
+    ];
 
     return [
       el('h2', { class: 'screen__title', text: t('settings.title') }),
@@ -229,12 +264,31 @@ export function createMenu({ mount, save, levels, on }) {
       el('span', { class: 'switch__label', text: t(`settings.${name}`) }));
   }
 
+  // Ползунок 0–100% (громкость). Значение хранится как доля 0..1.
+  function slider(name, value, onChange) {
+    const input = el('input', {
+      type: 'range', class: 'slider__input', id: `set-${name}`,
+      min: '0', max: '100', step: '5'
+    });
+    input.value = String(Math.round((value ?? 1) * 100));
+    const out = el('span', { class: 'slider__value', text: `${input.value}%` });
+    input.addEventListener('input', () => {
+      out.textContent = `${input.value}%`;
+      onChange(Number(input.value) / 100);
+    });
+    return el('label', { class: 'switch switch--slider', for: `set-${name}` },
+      el('span', { class: 'switch__label', text: t(`settings.${name}`) }),
+      input,
+      out);
+  }
+
   return {
     showMain: () => show(mainScreen),
     showLevels: () => show(levelsScreen),
     showWardrobe: () => show(wardrobeScreen),
     showSettings: () => show(settingsScreen),
     showDungeonHub: () => show(dungeonHubScreen),
+    showHowto: (cfg) => show(() => howtoScreen(cfg)),
     hide
   };
 }

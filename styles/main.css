@@ -70,11 +70,19 @@ body {
   outline-offset: 3px;
 }
 
+/* По умолчанию скрыта: показываем только в платформере во время игры (класс
+   hint-on на body ставит main.js). В данже клавиши другие, а под меню она — шум.
+   Выключается и в настройках. */
 .controls-hint {
+  display: none;
   margin: 0;
   font-size: 14px;
   color: color-mix(in srgb, var(--chalk) 65%, transparent);
   text-align: center;
+}
+
+body.hint-on .controls-hint {
+  display: block;
 }
 
 .controls-hint b {
@@ -85,7 +93,7 @@ body {
 
 /* Подсказка занимает место, которого на маленьком экране нет. */
 @media (max-height: 480px) {
-  .controls-hint {
+  body.hint-on .controls-hint {
     display: none;
   }
 
