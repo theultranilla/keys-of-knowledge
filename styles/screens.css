@@ -6,7 +6,12 @@
   inset: 0;
   z-index: 10;
   display: flex;
-  align-items: center;
+  /* Центрируем панель вертикально авто-полями (ниже), а НЕ align-items:center.
+     Иначе панель выше экрана (гардероб — 1700px) выталкивается вверх за край,
+     и overflow:auto не даёт доскроллить до её верха — заголовок и кошелёк
+     становятся недостижимы. Авто-поля при переполнении схлопываются в ноль,
+     и панель прокручивается с самого верха. */
+  align-items: flex-start;
   justify-content: center;
   padding: 20px;
   background: rgb(10 14 28 / 92%);
@@ -28,6 +33,7 @@
   flex-direction: column;
   gap: 18px;
   width: min(620px, 100%);
+  margin-block: auto; /* вертикальное центрирование, безопасное при переполнении */
   padding: 32px;
   border: 2px solid color-mix(in srgb, var(--chalk) 18%, transparent);
   border-radius: 20px;
@@ -309,6 +315,12 @@
 
 .wardrobe__item--on {
   border-color: var(--teal);
+}
+
+/* Кнопка/бейдж/цена — всегда у нижнего края карточки. Без этого в ряду, где у
+   одной вещи название в две строки, а у соседей в одну, кнопки прыгали по высоте. */
+.wardrobe__item > :last-child {
+  margin-top: auto;
 }
 
 .wardrobe__name {
