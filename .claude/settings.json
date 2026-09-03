@@ -1,0 +1,29 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(git status:*)",
+      "Bash(git add:*)",
+      "Bash(git commit:*)",
+      "Bash(git push:*)",
+      "Bash(git log:*)",
+      "Bash(git diff:*)",
+      "Bash(git restore:*)",
+      "Bash(python scripts/serve.py:*)",
+      "Bash(python scripts/verify-tasks.mjs:*)",
+      "Bash(node scripts/verify-tasks.mjs:*)"
+    ]
+  },
+  "hooks": {
+    "PostToolUse": [
+      {
+        "matcher": "Edit|Write|MultiEdit",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "python \"$CLAUDE_PROJECT_DIR/.claude/hooks/remind-checks.py\""
+          }
+        ]
+      }
+    ]
+  }
+}

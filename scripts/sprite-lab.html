@@ -1,0 +1,127 @@
+<!doctype html>
+<html lang="ru">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Ключи знаний — стенд моделек</title>
+    <style>
+      :root { color-scheme: dark; }
+      body { margin: 0; background: #0c1226; color: #e8ecff;
+        font-family: system-ui, sans-serif; }
+      header { padding: 14px 18px; border-bottom: 1px solid #24304f; }
+      h1 { margin: 0 0 4px; font-size: 18px; }
+      p { margin: 0; font-size: 13px; color: #9fb0e0; }
+      .controls { display: flex; gap: 16px; align-items: center; padding: 10px 18px; font-size: 13px; }
+      canvas { display: block; margin: 0 auto; }
+      label { display: inline-flex; gap: 6px; align-items: center; }
+    </style>
+  </head>
+  <body>
+    <header>
+      <h1>Стенд моделек данжа</h1>
+      <p>Живой рендер всех спрайтов и состояний из <code>src/game/dungeonSprites.js</code> и героя из
+        <code>character.js</code>. Правишь код — обновляешь страницу — сверяешь тут.</p>
+    </header>
+    <div class="controls">
+      <label>масштаб <input id="scale" type="range" min="1" max="4" step="0.5" value="2" /></label>
+      <label><input id="grid" type="checkbox" /> сетка пикселей</label>
+      <span id="fps"></span>
+    </div>
+    <canvas id="c" width="980" height="620"></canvas>
+
+    <script type="module">
+      import { drawEnemy, drawChest } from '../src/game/dungeonSprites.js';
+      import { drawCharacter } from '../src/engine/character.js';
+
+      const c = document.getElementById('c');
+      const ctx = c.getContext('2d');
+      const scaleInput = document.getElementById('scale');
+      const gridInput = document.getElementById('grid');
+
+      // Каждая ячейка знает, как нарисовать себя в своей клетке (cx,cy — центр).
+      const enemy = (label, k) => ({ label, draw: (t, cx, cy) =>
+        drawEnemy(ctx, { x: cx, y: cy, faceX: 0.6, faceY: 0.25, hitFlash: 0, ...k }, t) });
+
+      const enemies = [
+        enemy('преследователь', { kind: 'chaser', r: 15 }),
+        enemy('стрелок', { kind: 'shooter', r: 14 }),
+        enemy('танк', { kind: 'tank', r: 26 }),
+        enemy('бомбер', { kind: 'bomber', r: 15 }),
+        enemy('сплиттер', { kind: 'splitter', r: 18 }),
+        enemy('лекарь', { kind: 'healer', r: 15 }),
+        enemy('элита', { kind: 'chaser', r: 15, elite: true }),
+        enemy('мини-босс', { kind: 'chaser', r: 24, mini: true }),
+        enemy('босс-стрелок', { kind: 'boss', r: 30, variant: 'gunner' }),
+        enemy('босс ⚠залп', { kind: 'boss', r: 30, variant: 'gunner', burstCd: 0.2 }),
+        enemy('босс-таран', { kind: 'boss', r: 30, variant: 'charger' }),
+        enemy('таран ⚡ярость', { kind: 'boss', r: 30, variant: 'charger', chargeState: 'wind', enraged: true }),
+        enemy('получил урон', { kind: 'chaser', r: 15, hitFlash: 1 })
+      ];
+
+      const chests = [
+        { label: 'сундук · матем.', color: '#f2c14b', l: 'М' },
+        { label: 'сундук · физика', color: '#5ea0ff', l: 'Ф' },
+        { label: 'сундук · лечение', color: '#e0645f', l: 'М' }
+      ].map((ch) => ({ label: ch.label, draw: (t, cx, cy) =>
+        drawChest(ctx, { x: cx, y: cy, color: ch.color, label: ch.l }, t) }));
+
+      // Герой в нескольких образах — сверять костюмы гардероба.
+      const heroSkins = [
+        ['герой', { body: 'body.chalk', shirt: 'shirt.none', pants: 'pants.none', outfit: 'outfit.none', hat: 'hat.none', beard: 'beard.none' }],
+        ['маг', { body: 'body.mint', shirt: 'shirt.none', pants: 'pants.none', outfit: 'outfit.robe', hat: 'hat.wizard', beard: 'beard.wizard' }],
+        ['рыцарь', { body: 'body.peach', shirt: 'shirt.none', pants: 'pants.none', outfit: 'outfit.knight', hat: 'hat.crown', beard: 'beard.none' }],
+        ['принцесса', { body: 'body.peach', shirt: 'shirt.none', pants: 'pants.none', outfit: 'outfit.dress', hat: 'hat.tiara', beard: 'beard.none' }]
+      ];
+      const heroes = heroSkins.map(([label, skin]) => ({ label, draw: (t, cx, cy) => {
+        const s = 2.6, w = 22 * s, h = 30 * s;
+        drawCharacter(ctx, cx - w / 2, cy - h / 2, w, h, skin, 1);
+      } }));
+
+      const cells = [...enemies, ...chests, ...heroes];
+
+      const COLS = 6, CELL = 150, PAD = 20;
+      let last = performance.now(), frames = 0, fpsT = 0, fps = 0;
+
+      function render(t) {
+        const scale = Number(scaleInput.value);
+        c.width = PAD * 2 + COLS * CELL;
+        c.height = PAD * 2 + Math.ceil(cells.length / COLS) * CELL;
+        ctx.fillStyle = '#0c1226';
+        ctx.fillRect(0, 0, c.width, c.height);
+
+        cells.forEach((cell, i) => {
+          const col = i % COLS, row = (i / COLS) | 0;
+          const cx = PAD + col * CELL + CELL / 2;
+          const cy = PAD + row * CELL + CELL / 2 - 8;
+
+          if (gridInput.checked) {
+            ctx.strokeStyle = 'rgba(255,255,255,0.05)';
+            for (let gx = -60; gx <= 60; gx += 8 * scale) { ctx.beginPath(); ctx.moveTo(cx + gx, cy - 60); ctx.lineTo(cx + gx, cy + 50); ctx.stroke(); }
+            for (let gy = -60; gy <= 50; gy += 8 * scale) { ctx.beginPath(); ctx.moveTo(cx - 60, cy + gy); ctx.lineTo(cx + 60, cy + gy); ctx.stroke(); }
+          }
+
+          ctx.save();
+          ctx.translate(cx, cy);
+          ctx.scale(scale, scale);
+          ctx.translate(-cx, -cy);
+          cell.draw(t, cx, cy);
+          ctx.restore();
+
+          ctx.fillStyle = '#c8d4ff';
+          ctx.font = '12px system-ui, sans-serif';
+          ctx.textAlign = 'center';
+          ctx.fillText(cell.label, cx, PAD + row * CELL + CELL - 14);
+        });
+      }
+
+      function frame(now) {
+        const t = now / 1000;
+        frames++; fpsT += now - last; last = now;
+        if (fpsT > 500) { fps = Math.round((frames * 1000) / fpsT); frames = 0; fpsT = 0; document.getElementById('fps').textContent = fps + ' fps'; }
+        render(t);
+        requestAnimationFrame(frame);
+      }
+      requestAnimationFrame(frame);
+    </script>
+  </body>
+</html>
