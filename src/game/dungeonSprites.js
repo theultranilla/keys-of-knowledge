@@ -89,29 +89,34 @@ function eyes(ctx, r, fx, fy, { count = 2, size = 0.26, open = 1, calm = false }
   }
 }
 
-// Брови: наклон внутрь — злое выражение, наружу — спокойное.
-function brows(ctx, r, angry) {
+// Брови: наклон внутрь — злое, наружу — спокойное. ph — фаза анимации: брови
+// подрагивают, у злых злость пульсирует (хмурятся сильнее на бит).
+function brows(ctx, r, angry, ph = 0) {
   ctx.strokeStyle = INK; ctx.lineWidth = Math.max(2, r * 0.1); ctx.lineCap = 'round';
-  const y = -r * 0.4;
+  const bob = Math.sin(ph) * r * 0.06;
+  const flex = angry ? (Math.sin(ph * 0.7) * 0.5 + 0.5) * r * 0.06 : 0;
+  const y = -r * 0.4 + bob;
   for (const s of [-1, 1]) {
     const inX = s * r * 0.14, outX = s * r * 0.44;
-    const inY = angry ? y + r * 0.14 : y - r * 0.02, outY = angry ? y - r * 0.04 : y - r * 0.08;
+    const inY = angry ? y + r * 0.14 + flex : y - r * 0.02, outY = angry ? y - r * 0.04 : y - r * 0.08;
     ctx.beginPath(); ctx.moveTo(inX, inY); ctx.lineTo(outX, outY); ctx.stroke();
   }
 }
 
-// Ротики.
-function smile(ctx, r, y, w, curve) {
+// Ротики. ph — фаза: улыбка «дышит», пасть чавкает (открывается/закрывается).
+function smile(ctx, r, y, w, curve, ph = 0) {
   ctx.strokeStyle = INK; ctx.lineWidth = Math.max(2, r * 0.09); ctx.lineCap = 'round';
-  ctx.beginPath(); ctx.moveTo(-w, y); ctx.quadraticCurveTo(0, y + curve, w, y); ctx.stroke();
+  const c = curve * (1 + Math.sin(ph) * 0.28);
+  ctx.beginPath(); ctx.moveTo(-w, y); ctx.quadraticCurveTo(0, y + c, w, y); ctx.stroke();
 }
-function fangs(ctx, r, y) {
-  ctx.fillStyle = INK; // рот
-  rr(ctx, -r * 0.34, y, r * 0.68, r * 0.26, r * 0.1); ctx.fill();
-  ctx.fillStyle = '#fff'; // клыки
+function fangs(ctx, r, y, ph = 0) {
+  const open = r * (0.2 + (Math.sin(ph) * 0.5 + 0.5) * 0.16); // высота пасти пульсирует
+  ctx.fillStyle = INK;
+  rr(ctx, -r * 0.34, y, r * 0.68, open, r * 0.1); ctx.fill();
+  ctx.fillStyle = '#fff';
   for (const s of [-1, 1]) {
     ctx.beginPath();
-    ctx.moveTo(s * r * 0.22, y); ctx.lineTo(s * r * 0.1, y); ctx.lineTo(s * r * 0.16, y + r * 0.16);
+    ctx.moveTo(s * r * 0.22, y); ctx.lineTo(s * r * 0.1, y); ctx.lineTo(s * r * 0.16, y + open * 0.7);
     ctx.closePath(); ctx.fill();
   }
 }
@@ -138,6 +143,8 @@ export function drawEnemy(ctx, e, t) {
   const walk = t * 7 + e.x * 0.1;
   const blink = ((Math.sin(t * 1.6 + e.y * 0.1) + 1) / 2) > 0.94 ? 0.12 : 1;
   const ang = Math.atan2(fy, fx);
+  const mph = t * 5 + e.x * 0.13; // фаза рта (чавканье/дыхание)
+  const bph = t * 3 + e.y * 0.11; // фаза бровей (подрагивание/хмурость)
 
   ctx.save();
   ctx.translate(e.x, e.y);
@@ -155,8 +162,8 @@ export function drawEnemy(ctx, e, t) {
     body(ctx, r, col, wob);
     arms(ctx, r, dark, walk);
     eyes(ctx, r, fx, fy, { open: blink });
-    brows(ctx, r, true);
-    fangs(ctx, r, r * 0.34);
+    brows(ctx, r, true, bph);
+    fangs(ctx, r, r * 0.34, mph);
   } else if (e.kind === 'shooter') {
     // парит: ножек нет, зато пушка-рука по направлению взгляда
     body(ctx, r, col, wob);
@@ -165,7 +172,7 @@ export function drawEnemy(ctx, e, t) {
     ctx.fillStyle = shade(base, 0.5); rr(ctx, r * 0.95, -r * 0.14, r * 0.6, r * 0.28, r * 0.1); ctx.fill(); // дуло
     ctx.restore();
     eyes(ctx, r, fx, fy, { count: 1, size: 0.42, open: blink });
-    brows(ctx, r, true);
+    brows(ctx, r, true, bph);
   } else if (e.kind === 'tank') {
     feet(ctx, r, dark, walk * 0.5);
     body(ctx, r, col, wob * 0.5);
@@ -173,8 +180,8 @@ export function drawEnemy(ctx, e, t) {
     limb(ctx, dark, r * 0.95, r * 0.1, r * 0.28, r * 0.24);
     ctx.fillStyle = shade(base, 0.5); rr(ctx, -r * 0.5, r * 0.02, r, r * 0.5, r * 0.16); ctx.fill(); // нагрудник
     eyes(ctx, r, fx, fy, { size: 0.17, open: blink });
-    brows(ctx, r, true);
-    smile(ctx, r, r * 0.4, r * 0.3, -r * 0.2); // хмурый рот дугой вниз
+    brows(ctx, r, true, bph);
+    smile(ctx, r, r * 0.4, r * 0.3, -r * 0.2, mph); // хмурый рот дугой вниз
   } else if (e.kind === 'bomber') {
     ring(ctx, r, '#ffcaa0', 2, 4);
     feet(ctx, r, dark, walk);
@@ -185,7 +192,7 @@ export function drawEnemy(ctx, e, t) {
     ctx.fillStyle = ((Math.sin(t * 12) + 1) / 2) > 0.5 ? '#ffd23a' : '#ff7a3a';
     ctx.beginPath(); ctx.arc(r * 0.18, -r * 1.46, r * 0.16, 0, Math.PI * 2); ctx.fill();
     eyes(ctx, r, fx, fy, { size: 0.28, open: blink });
-    smile(ctx, r, r * 0.44, r * 0.22, -r * 0.26); // тревожный ротик
+    smile(ctx, r, r * 0.44, r * 0.22, -r * 0.26, mph); // тревожный ротик
   } else if (e.kind === 'splitter') {
     body(ctx, r, col, wob * 1.7); // студень — сильнее колышется
     ctx.fillStyle = shade(base, 0.28); // капли снизу
@@ -194,7 +201,7 @@ export function drawEnemy(ctx, e, t) {
     ctx.beginPath(); ctx.moveTo(0, -r * 0.75); ctx.lineTo(0, r * 0.75); ctx.stroke();
     arms(ctx, r, shade(base, 0.28), walk, { rx: 0.14, ry: 0.12 });
     eyes(ctx, r, fx, fy, { size: 0.22, open: blink });
-    smile(ctx, r, r * 0.34, r * 0.24, r * 0.2); // добродушная улыбка
+    smile(ctx, r, r * 0.34, r * 0.24, r * 0.2, mph); // добродушная улыбка
   } else if (e.kind === 'healer') {
     ctx.strokeStyle = 'rgba(255,255,255,0.65)'; ctx.lineWidth = Math.max(2, r * 0.09); // нимб
     ctx.beginPath(); ctx.ellipse(0, -r * 0.95, r * 0.5, r * 0.16, 0, 0, Math.PI * 2); ctx.stroke();
@@ -205,7 +212,7 @@ export function drawEnemy(ctx, e, t) {
     rr(ctx, -r * 0.09, -r * 0.28, r * 0.18, r * 0.56, r * 0.04); ctx.fill();
     rr(ctx, -r * 0.28, -r * 0.09, r * 0.56, r * 0.18, r * 0.04); ctx.fill();
     eyes(ctx, r, fx, fy, { size: 0.2, open: blink * 0.5, calm: true });
-    smile(ctx, r, r * 0.42, r * 0.2, r * 0.14);
+    smile(ctx, r, r * 0.42, r * 0.2, r * 0.14, mph);
   } else if (e.kind === 'boss') {
     feet(ctx, r, dark, walk * 0.6);
     if (charger) { tri(ctx, -r * 0.58, -r * 0.74, r * 0.24, r * 0.62, dark); tri(ctx, r * 0.58, -r * 0.74, r * 0.24, r * 0.62, dark); }
@@ -215,13 +222,13 @@ export function drawEnemy(ctx, e, t) {
       for (const s of [-1, 1]) { limb(ctx, dark, r * 0.7, s * r * 0.5, r * 0.3, r * 0.2); ctx.fillStyle = shade(base, 0.5); rr(ctx, r * 0.85, s * r * 0.5 - r * 0.1, r * 0.5, r * 0.2, r * 0.08); ctx.fill(); }
       ctx.restore();
       eyes(ctx, r, fx, fy, { count: 1, size: 0.36, open: blink });
-      brows(ctx, r, true);
+      brows(ctx, r, true, bph);
     } else {
       limb(ctx, dark, -r * 0.96, r * 0.12, r * 0.3, r * 0.26); // кулачищи
       limb(ctx, dark, r * 0.96, r * 0.12, r * 0.3, r * 0.26);
       eyes(ctx, r, fx, fy, { size: 0.19, open: blink });
-      brows(ctx, r, true);
-      fangs(ctx, r, r * 0.42);
+      brows(ctx, r, true, bph);
+      fangs(ctx, r, r * 0.42, mph);
     }
   } else {
     feet(ctx, r, dark, walk);
