@@ -17,28 +17,44 @@ export function drawCharacter(ctx, x, y, w, h, skin = DEFAULT_SKIN, facing = 1) 
   const hat = pick('hat');
   const beard = pick('beard');
 
-  const sx = w / 22;
-  const sy = h / 30;
-  const unit = Math.min(sx, sy);
+  const unit = Math.min(w / 22, h / 30);
   const radius = 6 * unit;
 
-  // Тело.
-  ctx.fillStyle = body?.color ?? PALETTE.chalk;
-  roundedRect(ctx, x, y, w, h, radius);
-  ctx.fill();
+  const cx = x + w / 2;
+  const dir = facing > 0 ? 1 : -1;
+  const skinCol = body?.color ?? PALETTE.chalk;
 
-  // Одежду обрезаем по силуэту тела, чтобы полосы не торчали за скруглённые углы.
+  // Башмачки за телом — герой «стоит», а не парит кубиком.
+  ctx.fillStyle = dk(skinCol, 0.5);
+  for (const s of [-1, 1]) {
+    ctx.beginPath();
+    ctx.ellipse(cx + s * w * 0.24, y + h - 1.5 * unit, w * 0.17, h * 0.07, 0, 0, Math.PI * 2);
+    ctx.fill();
+  }
+
+  // Тело: тёмная обводка-подложка, заливка, тень снизу и мягкий блик сверху.
+  ctx.fillStyle = dk(skinCol, 0.42);
+  roundedRect(ctx, x, y, w, h, radius); ctx.fill();
+  ctx.fillStyle = skinCol;
+  roundedRect(ctx, x + 1.5 * unit, y + 1.5 * unit, w - 3 * unit, h - 3 * unit, Math.max(2, radius - unit)); ctx.fill();
+  ctx.save();
+  roundedRect(ctx, x, y, w, h, radius); ctx.clip();
+  ctx.fillStyle = 'rgba(0,0,0,0.12)'; ctx.fillRect(x, y + h * 0.72, w, h * 0.28);
+  ctx.fillStyle = 'rgba(255,255,255,0.18)';
+  ctx.beginPath(); ctx.ellipse(x + w * 0.32, y + h * 0.22, w * 0.22, h * 0.13, -0.4, 0, Math.PI * 2); ctx.fill();
+  ctx.restore();
+
+  // Одежду обрезаем по силуэту тела; у каждой полосы тёмный шов снизу — объём.
   if (pants?.color || shirt?.color) {
     ctx.save();
-    roundedRect(ctx, x, y, w, h, radius);
-    ctx.clip();
+    roundedRect(ctx, x, y, w, h, radius); ctx.clip();
     if (pants?.color) {
-      ctx.fillStyle = pants.color;
-      ctx.fillRect(x, y + h * 0.66, w, h * 0.34);
+      ctx.fillStyle = pants.color; ctx.fillRect(x, y + h * 0.66, w, h * 0.34);
+      ctx.fillStyle = 'rgba(0,0,0,0.16)'; ctx.fillRect(x, y + h * 0.66, w, 2 * unit);
     }
     if (shirt?.color) {
-      ctx.fillStyle = shirt.color;
-      ctx.fillRect(x, y + h * 0.42, w, h * 0.25);
+      ctx.fillStyle = shirt.color; ctx.fillRect(x, y + h * 0.42, w, h * 0.25);
+      ctx.fillStyle = 'rgba(0,0,0,0.12)'; ctx.fillRect(x, y + h * 0.42 + h * 0.25 - 2 * unit, w, 2 * unit);
     }
     ctx.restore();
   }
@@ -46,20 +62,37 @@ export function drawCharacter(ctx, x, y, w, h, skin = DEFAULT_SKIN, facing = 1) 
   // Наряд поверх рубашки/штанов — из него собирается образ (маг/ассасин/принцесса).
   if (outfit?.style) drawOutfit(ctx, x, y, w, h, outfit);
 
-  // Янтарный фонарик смотрит туда же, куда бежит игрок.
-  ctx.fillStyle = PALETTE.amber;
-  const lampX = facing > 0 ? x + w - 8 * sx : x + 2 * sx;
-  roundedRect(ctx, lampX, y + 7 * sy, 6 * sx, 6 * sy, 2 * unit);
-  ctx.fill();
-
-  // Глаза.
-  ctx.fillStyle = PALETTE.skyDeep;
-  const eyeX = facing > 0 ? x + 12 * sx : x + 6 * sx;
-  ctx.fillRect(eyeX, y + 8 * sy, 3 * sx, 4 * sy);
-  ctx.fillRect(eyeX - 5 * sx, y + 8 * sy, 3 * sx, 4 * sy);
+  // Мордочка: два больших глаза со зрачком и бликом (смотрят по направлению бега),
+  // щёчки и улыбка. Рисуется поверх наряда, но под бородой/шапкой.
+  const eyeY = y + h * 0.3, eyeDX = w * 0.19, eyeRX = w * 0.135, eyeRY = h * 0.1;
+  for (const s of [-1, 1]) {
+    const ex = cx + s * eyeDX;
+    ctx.fillStyle = '#fbfbff';
+    ctx.beginPath(); ctx.ellipse(ex, eyeY, eyeRX, eyeRY, 0, 0, Math.PI * 2); ctx.fill();
+    ctx.fillStyle = PALETTE.skyDeep;
+    ctx.beginPath(); ctx.arc(ex + dir * eyeRX * 0.42, eyeY + eyeRY * 0.12, eyeRX * 0.56, 0, Math.PI * 2); ctx.fill();
+    ctx.fillStyle = 'rgba(255,255,255,0.92)';
+    ctx.beginPath(); ctx.arc(ex + dir * eyeRX * 0.42 - eyeRX * 0.22, eyeY - eyeRY * 0.2, eyeRX * 0.24, 0, Math.PI * 2); ctx.fill();
+  }
+  ctx.fillStyle = 'rgba(255,120,120,0.30)'; // щёчки
+  for (const s of [-1, 1]) {
+    ctx.beginPath(); ctx.ellipse(cx + s * w * 0.3, eyeY + h * 0.1, w * 0.075, h * 0.045, 0, 0, Math.PI * 2); ctx.fill();
+  }
+  if (!beard?.style) { // улыбка (борода её закрыла бы)
+    ctx.strokeStyle = PALETTE.skyDeep; ctx.lineWidth = Math.max(1.5, unit * 1.3); ctx.lineCap = 'round';
+    const my = eyeY + h * 0.15;
+    ctx.beginPath(); ctx.moveTo(cx - w * 0.1, my); ctx.quadraticCurveTo(cx, my + h * 0.06, cx + w * 0.1, my); ctx.stroke();
+  }
 
   if (beard?.style) drawBeard(ctx, x, y, w, h, beard);
   if (hat?.style) drawHat(ctx, x, y, w, h, hat, facing);
+}
+
+// Затемнить hex-цвет на долю f — для обводки/теней тела и башмачков.
+function dk(hex, f) {
+  const n = parseInt(hex.slice(1), 16);
+  const c = (v) => Math.max(0, Math.round(v * (1 - f)));
+  return `rgb(${c((n >> 16) & 255)},${c((n >> 8) & 255)},${c(n & 255)})`;
 }
 
 // Крупная одежда во весь силуэт. Торс/ноги закрашиваются в силуэте тела (clip),
