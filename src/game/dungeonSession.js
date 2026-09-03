@@ -3,7 +3,8 @@ import { drawCharacter } from '../engine/character.js';
 import { DEFAULT_SKIN } from './skins.js';
 import {
   generateFloor, roomInterior, roomContains, allWalls, drawRooms, spawnChests, spawnShop, bossReward,
-  spawnTraps, drawTraps, trapsOut, TRAP_SIZE, spawnObstacles, spawnMini, spawnAltars, ROOM_H, WALL
+  spawnTraps, drawTraps, trapsOut, TRAP_SIZE, spawnObstacles, spawnMini, spawnAltars, ROOM_H, WALL,
+  drawBiomeBackground
 } from './dungeonFloor.js';
 import { createDungeonTouch } from './dungeonTouch.js';
 import { createCombat, WEAPONS, WEAPON_DROPS } from './dungeonCombat.js';
@@ -479,8 +480,7 @@ export function createDungeonSession({ input, audio, save, canvas, modal, tasks,
   }
 
   function render(ctx, alpha) {
-    ctx.fillStyle = floor.biome?.bg ?? '#0c1226'; // фон по биому этажа
-    ctx.fillRect(0, 0, VIEW_WIDTH, VIEW_HEIGHT);
+    drawBiomeBackground(ctx, floor, VIEW_WIDTH, VIEW_HEIGHT); // фон биома: градиент + пылинки
 
     let camX = lerp(cam.prevX, cam.x, alpha), camY = lerp(cam.prevY, cam.y, alpha);
     if (shake > 0.2) { camX += (Math.random() - 0.5) * shake; camY += (Math.random() - 0.5) * shake; }

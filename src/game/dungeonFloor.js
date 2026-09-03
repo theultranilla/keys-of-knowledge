@@ -1,5 +1,6 @@
 import { TILE, PALETTE } from '../engine/constants.js';
 import { drawChest } from './dungeonSprites.js';
+import { roundedRect } from '../engine/shapes.js';
 
 // Раскладка этажа-подземелья: комнаты на сетке, соединённые дверями (как в Soul
 // Knight). Дерево комнат строится случайным обходом от старта. Геометрия комнаты —
@@ -32,11 +33,29 @@ const FLOOR_TINT = {
 // Биомы по глубине: пещеры → лёд → жар → бездна. Меняют цвет пола обычных комнат,
 // стен и фона. Числа-цвета на ощупь.
 const BIOMES = [
-  { name: 'cave',  floor: '#23305A', wall: '#151b34', bg: '#0c1226' },
-  { name: 'ice',   floor: '#25415a', wall: '#2a3f56', bg: '#0b1a24' },
-  { name: 'ember', floor: '#3a2626', wall: '#3a2020', bg: '#180c0c' },
-  { name: 'void',  floor: '#2c2440', wall: '#241a34', bg: '#0e0a1a' }
+  { name: 'cave',  floor: '#23305A', wall: '#151b34', bg: '#0c1226', bgTop: '#161f3e', speck: 'rgba(150,180,255,0.5)' },
+  { name: 'ice',   floor: '#25415a', wall: '#2a3f56', bg: '#0b1a24', bgTop: '#123043', speck: 'rgba(200,235,255,0.6)' },
+  { name: 'ember', floor: '#3a2626', wall: '#3a2020', bg: '#180c0c', bgTop: '#2e1512', speck: 'rgba(255,180,120,0.5)' },
+  { name: 'void',  floor: '#2c2440', wall: '#241a34', bg: '#0e0a1a', bgTop: '#1c1230', speck: 'rgba(200,160,255,0.5)' }
 ];
+
+// Фон биома: вертикальный градиент + редкие статичные «пылинки» (звёзды/искры/
+// снежинки по биому) для глубины. Рисуется в экранных координатах, до камеры.
+export function drawBiomeBackground(ctx, floor, w, h) {
+  const b = floor.biome ?? BIOMES[0];
+  const g = ctx.createLinearGradient(0, 0, 0, h);
+  g.addColorStop(0, b.bgTop ?? b.bg);
+  g.addColorStop(1, b.bg);
+  ctx.fillStyle = g;
+  ctx.fillRect(0, 0, w, h);
+  ctx.fillStyle = b.speck ?? 'rgba(255,255,255,0.4)';
+  for (let i = 0; i < 46; i++) {
+    const x = (i * 96.7) % w, y = (i * 61.3 + (i * i) * 7.1) % h, s = (i % 3) + 1;
+    ctx.globalAlpha = 0.05 + (i % 4) * 0.02;
+    ctx.fillRect(x, y, s, s);
+  }
+  ctx.globalAlpha = 1;
+}
 
 export function biomeFor(floorNumber) {
   return BIOMES[Math.min(BIOMES.length - 1, Math.floor((floorNumber - 1) / 2))];
@@ -182,21 +201,36 @@ export function allWalls(floor) {
 
 export function drawRooms(ctx, floor, t = 0) {
   const biome = floor.biome ?? BIOMES[0];
-  // пол: у обычных комнат — цвет биома, у особых — свой сигнальный тинт
+  // пол: цвет биома (или тинт особой комнаты) + сетка плитки + тень у стен
   for (const room of floor.rooms) {
     const it = roomInterior(room);
+    const fw = it.x1 - it.x0, fh = it.y1 - it.y0;
     ctx.fillStyle = FLOOR_TINT[room.kind] ?? biome.floor;
-    ctx.fillRect(it.x0, it.y0, it.x1 - it.x0, it.y1 - it.y0);
+    ctx.fillRect(it.x0, it.y0, fw, fh);
+    ctx.strokeStyle = 'rgba(0,0,0,0.12)'; ctx.lineWidth = 1; // плитка
+    ctx.beginPath();
+    for (let gx = it.x0 + TILE; gx < it.x1; gx += TILE) { ctx.moveTo(gx, it.y0); ctx.lineTo(gx, it.y1); }
+    for (let gy = it.y0 + TILE; gy < it.y1; gy += TILE) { ctx.moveTo(it.x0, gy); ctx.lineTo(it.x1, gy); }
+    ctx.stroke();
+    ctx.fillStyle = 'rgba(255,255,255,0.03)'; // лёгкий блик по центру пола — объём
+    ctx.fillRect(it.x0, it.y0, fw, Math.min(fh, TILE * 2));
   }
-  // стены — цвет биома
-  ctx.fillStyle = biome.wall;
-  for (const room of floor.rooms) for (const r of roomWalls(room)) ctx.fillRect(r.x, r.y, r.w, r.h);
-  // столбы-укрытия — чуть светлее стен, с бликом, чтобы читались как объекты в комнате
+  // стены — база биома + фаска (светлый верх, тёмный низ), читаются объёмными
+  for (const room of floor.rooms) for (const r of roomWalls(room)) {
+    ctx.fillStyle = biome.wall;
+    ctx.fillRect(r.x, r.y, r.w, r.h);
+    ctx.fillStyle = 'rgba(255,255,255,0.07)';
+    ctx.fillRect(r.x, r.y, r.w, 3);
+    ctx.fillStyle = 'rgba(0,0,0,0.28)';
+    ctx.fillRect(r.x, r.y + r.h - 3, r.w, 3);
+  }
+  // столбы-укрытия — круглые колонны с боковым градиентом, верхней гранью и тенью
   for (const room of floor.rooms) if (room.obstacles) for (const o of room.obstacles) {
-    ctx.fillStyle = '#26314f';
-    ctx.fillRect(o.x, o.y, o.w, o.h);
-    ctx.fillStyle = 'rgba(255,255,255,0.08)';
-    ctx.fillRect(o.x, o.y, o.w, 4);
+    const grd = ctx.createLinearGradient(o.x, 0, o.x + o.w, 0);
+    grd.addColorStop(0, '#3a4770'); grd.addColorStop(1, '#1b2340');
+    ctx.fillStyle = grd; roundedRect(ctx, o.x, o.y, o.w, o.h, 7); ctx.fill();
+    ctx.fillStyle = 'rgba(255,255,255,0.12)'; roundedRect(ctx, o.x + 3, o.y + 3, o.w - 6, 6, 3); ctx.fill();
+    ctx.fillStyle = 'rgba(0,0,0,0.3)'; ctx.fillRect(o.x + 2, o.y + o.h - 5, o.w - 4, 5);
   }
   // пикапы (монеты/лечение), выпавшие с боёв
   for (const room of floor.rooms) if (room.pickups) for (const p of room.pickups) {
