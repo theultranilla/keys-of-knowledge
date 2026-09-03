@@ -1,5 +1,5 @@
 import { VIEW_WIDTH, VIEW_HEIGHT, PALETTE, PLAYER_WIDTH, PLAYER_HEIGHT } from '../engine/constants.js';
-import { drawHeroPixel } from './dungeonSprites.js';
+import { drawCharacter } from '../engine/character.js';
 import { DEFAULT_SKIN } from './skins.js';
 import {
   generateFloor, roomInterior, roomContains, allWalls, drawRooms, spawnChests, spawnShop, bossReward,
@@ -504,7 +504,7 @@ export function createDungeonSession({ input, audio, save, canvas, modal, tasks,
     // Шлейф рывка — пара бледных копий позади (в спокойном режиме не рисуем).
     if (dashTime > 0 && !prefersReducedMotion()) {
       ctx.globalAlpha = 0.22;
-      for (let k = 1; k <= 2; k++) drawHeroPixel(ctx, px - dashDir.x * 11 * k, py - dashDir.y * 11 * k, player.width, player.height, skin, player.facing);
+      for (let k = 1; k <= 2; k++) drawCharacter(ctx, px - dashDir.x * 11 * k, py - dashDir.y * 11 * k, player.width, player.height, skin, player.facing);
       ctx.globalAlpha = 1;
     }
     // Кадры неуязвимости после урона: мигаем. В спокойном режиме без вспышек —
@@ -514,7 +514,7 @@ export function createDungeonSession({ input, audio, save, canvas, modal, tasks,
       heroAlpha = prefersReducedMotion() ? 0.5 : (Math.floor(player.hurtCd * 12) % 2 === 0 ? 0.3 : 1);
     }
     ctx.globalAlpha = heroAlpha;
-    drawHeroPixel(ctx, px, py, player.width, player.height, skin, player.facing);
+    drawCharacter(ctx, px, py, player.width, player.height, skin, player.facing);
     ctx.globalAlpha = 1;
     const cx = px + player.width / 2, cy = py + player.height / 2;
     ctx.strokeStyle = PALETTE.amber; ctx.lineWidth = 4; ctx.lineCap = 'round';
