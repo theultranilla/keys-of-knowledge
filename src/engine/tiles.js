@@ -17,7 +17,7 @@ export function drawTiles(ctx, map, cameraX, cameraY, time = 0, springPulses = n
     for (let column = columnFrom; column <= columnTo; column++) {
       const kind = map.tileAt(column, line);
       if (kind === 'ground' || kind === 'platform') {
-        drawTile(ctx, kind, column * TILE, line * TILE);
+        drawTile(ctx, map, column, line, kind);
       } else if (kind === 'spring') {
         const pulse = springPulses?.get(`${column}:${line}`) ?? 0;
         drawSpring(ctx, column * TILE, line * TILE, pulse, time);
@@ -66,24 +66,39 @@ function drawSpring(ctx, x, y, pulse, time) {
   ctx.globalAlpha = 1;
 }
 
-function drawTile(ctx, kind, x, y) {
-  const isGround = kind === 'ground';
+// Мультяшный тайл: грунт с травяной шапкой. Трава и кромки рисуются только на
+// ОТКРЫТЫХ гранях (где нет соседнего тайла), поэтому сплошной массив выглядит как
+// цельная земля, а не как решётка одинаковых квадратиков.
+const DIRT = '#7a512e', DIRT_DK = '#5d3d22', GRASS = '#5cb552', GRASS_DK = '#3f8f3a';
+const solidTile = (k) => k === 'ground' || k === 'platform';
 
-  ctx.fillStyle = isGround ? 'rgba(232, 236, 244, 0.10)' : 'rgba(232, 236, 244, 0.16)';
-  roundedRect(ctx, x + 1, y + 1, TILE - 2, TILE - 2, 4);
-  ctx.fill();
+function drawTile(ctx, map, col, line, kind) {
+  const x = col * TILE, y = line * TILE;
+  const openTop = !solidTile(map.tileAt(col, line - 1));
+  const openBot = !solidTile(map.tileAt(col, line + 1));
+  const openL = !solidTile(map.tileAt(col - 1, line));
+  const openR = !solidTile(map.tileAt(col + 1, line));
 
-  ctx.strokeStyle = PALETTE.chalk;
-  ctx.globalAlpha = isGround ? 0.35 : 0.6;
-  ctx.lineWidth = 2;
-  roundedRect(ctx, x + 1, y + 1, TILE - 2, TILE - 2, 4);
-  ctx.stroke();
+  // тело-грунт
+  ctx.fillStyle = DIRT;
+  ctx.fillRect(x, y, TILE, TILE);
+  // крапины камешков — детерминированы по координате, чтобы не мигали
+  ctx.fillStyle = 'rgba(0,0,0,0.13)';
+  const h = (col * 7 + line * 13) % 4;
+  ctx.fillRect(x + 4 + h * 4, y + TILE * 0.5, 4, 4);
+  ctx.fillRect(x + TILE - 11, y + TILE * 0.68, 3, 3);
 
-  // Тонкая линия по верху: подчёркивает, куда именно можно приземлиться.
-  ctx.globalAlpha = isGround ? 0.5 : 0.85;
-  ctx.beginPath();
-  ctx.moveTo(x + 4, y + 2.5);
-  ctx.lineTo(x + TILE - 4, y + 2.5);
-  ctx.stroke();
-  ctx.globalAlpha = 1;
+  if (openTop) {
+    // травяная шапка + свисающие бугорки
+    ctx.fillStyle = GRASS_DK; ctx.fillRect(x, y, TILE, 11);
+    ctx.fillStyle = GRASS; ctx.fillRect(x, y, TILE, 7);
+    ctx.fillStyle = GRASS_DK;
+    for (let i = 0; i < 3; i++) { ctx.beginPath(); ctx.arc(x + 5 + i * (TILE / 3), y + 11, 3.2, 0, Math.PI); ctx.fill(); }
+    ctx.fillStyle = 'rgba(255,255,255,0.18)'; ctx.fillRect(x, y, TILE, 2); // блик на траве
+  }
+  // тёмные кромки только по открытым сторонам — дают объём массиву
+  ctx.fillStyle = 'rgba(0,0,0,0.22)';
+  if (openBot) ctx.fillRect(x, y + TILE - 3, TILE, 3);
+  if (openL) ctx.fillRect(x, y + (openTop ? 11 : 0), 3, TILE - (openTop ? 11 : 0));
+  if (openR) ctx.fillRect(x + TILE - 3, y + (openTop ? 11 : 0), 3, TILE - (openTop ? 11 : 0));
 }

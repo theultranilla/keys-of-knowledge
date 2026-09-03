@@ -1,89 +1,107 @@
 import { prefersReducedMotion } from './motion.js';
-import {
-  VIEW_WIDTH,
-  VIEW_HEIGHT,
-  PALETTE,
-  PARALLAX_FAR,
-  PARALLAX_NEAR
-} from './constants.js';
+import { VIEW_WIDTH, VIEW_HEIGHT, PARALLAX_FAR, PARALLAX_NEAR } from './constants.js';
 
-// Ночное небо с созвездиями в два слоя. Дальний слой почти неподвижен, ближний
-// заметно отстаёт от мира — так у плоской сцены появляется глубина.
+// Закатное мультяшное небо: градиент, мягкое солнце у горизонта, два слоя холмов
+// и облака — всё с параллаксом, чтобы у плоской сцены была глубина. Тёмный верх
+// держит контраст со светлым героем в прыжке. prefers-reduced-motion замораживает
+// движение слоёв (иначе разноскоростной параллакс укачивает).
 
-const FAR_STARS = 70;
-const NEAR_STARS = 34;
+const SKY_TOP = '#33285e', SKY_MID = '#8a4a7a', SKY_LOW = '#e6864f';
+const HILL_FAR = '#5c4275', HILL_NEAR = '#38284e';
+const SUN = '#ffd07a', SUN_GLOW = 'rgba(255,190,120,0.35)';
+const CLOUD = 'rgba(255,226,205,0.55)';
+
+const FAR_STARS = 26;
 
 export function createBackground() {
-  const far = createStars(FAR_STARS, 20260727, 0.5, 1.4, 0.18, 0.45);
-  const near = createStars(NEAR_STARS, 991733, 1.1, 2.2, 0.45, 0.85);
-
-  let sky = null;
-  let skyHeight = 0;
+  const stars = createStars(FAR_STARS, 20260727);
+  const clouds = createClouds(6, 771931);
+  let sky = null, skyH = 0;
 
   function draw(ctx, camera) {
-    if (!sky || skyHeight !== VIEW_HEIGHT) {
+    if (!sky || skyH !== VIEW_HEIGHT) {
       sky = ctx.createLinearGradient(0, 0, 0, VIEW_HEIGHT);
-      sky.addColorStop(0, PALETTE.skyDeep);
-      sky.addColorStop(1, PALETTE.skyMid);
-      skyHeight = VIEW_HEIGHT;
+      sky.addColorStop(0, SKY_TOP);
+      sky.addColorStop(0.55, SKY_MID);
+      sky.addColorStop(1, SKY_LOW);
+      skyH = VIEW_HEIGHT;
     }
-
     ctx.fillStyle = sky;
     ctx.fillRect(0, 0, VIEW_WIDTH, VIEW_HEIGHT);
 
-    // При prefers-reduced-motion фон замирает: движущиеся с разной скоростью
-    // слои — ровно тот эффект, от которого людям с вестибулярной чувствительностью
-    // становится плохо.
     const reduced = prefersReducedMotion();
-    const offsetX = reduced ? 0 : camera.x;
-    const offsetY = reduced ? 0 : camera.y;
+    const ox = reduced ? 0 : camera.x;
 
-    drawLayer(ctx, far, offsetX * PARALLAX_FAR, offsetY * PARALLAX_FAR);
-    drawLayer(ctx, near, offsetX * PARALLAX_NEAR, offsetY * PARALLAX_NEAR);
+    // редкие звёзды в верхней трети (только там, где небо тёмное)
+    ctx.fillStyle = '#fdeecf';
+    for (const s of stars) {
+      const x = wrap(s.x - ox * PARALLAX_FAR * 0.5, VIEW_WIDTH);
+      ctx.globalAlpha = s.alpha;
+      ctx.beginPath(); ctx.arc(x, s.y, s.r, 0, Math.PI * 2); ctx.fill();
+    }
+    ctx.globalAlpha = 1;
+
+    // солнце у горизонта (двигается медленнее всего)
+    const sunX = wrap(VIEW_WIDTH * 0.72 - ox * PARALLAX_FAR * 0.4, VIEW_WIDTH + 200) - 100;
+    const sunY = VIEW_HEIGHT * 0.62;
+    const glow = ctx.createRadialGradient(sunX, sunY, 6, sunX, sunY, 90);
+    glow.addColorStop(0, SUN_GLOW); glow.addColorStop(1, 'rgba(255,190,120,0)');
+    ctx.fillStyle = glow; ctx.beginPath(); ctx.arc(sunX, sunY, 90, 0, Math.PI * 2); ctx.fill();
+    ctx.fillStyle = SUN; ctx.beginPath(); ctx.arc(sunX, sunY, 26, 0, Math.PI * 2); ctx.fill();
+
+    // облака (средний параллакс)
+    for (const c of clouds) {
+      const x = wrap(c.x - ox * PARALLAX_NEAR * 0.6, VIEW_WIDTH + 220) - 110;
+      cloud(ctx, x, c.y, c.s);
+    }
+
+    // холмы: дальние (светлее, выше) и ближние (темнее, ниже)
+    hills(ctx, VIEW_HEIGHT * 0.72, 56, 380, HILL_FAR, ox * PARALLAX_FAR);
+    hills(ctx, VIEW_HEIGHT * 0.82, 92, 260, HILL_NEAR, ox * PARALLAX_NEAR);
   }
 
   return { draw };
 }
 
-function drawLayer(ctx, stars, offsetX, offsetY) {
-  ctx.fillStyle = PALETTE.chalk;
-  for (const star of stars) {
-    // Слой замкнут сам на себя по горизонтали: звёзды не кончаются, сколько бы
-    // ни ехала камера, и хранить их для всего уровня не нужно.
-    const x = wrap(star.x - offsetX, VIEW_WIDTH);
-    const y = star.y - offsetY * 0.5;
-    if (y < -4 || y > VIEW_HEIGHT + 4) continue;
-
-    ctx.globalAlpha = star.alpha;
-    ctx.beginPath();
-    ctx.arc(x, y, star.radius, 0, Math.PI * 2);
-    ctx.fill();
+// Слой холмов: гладкие горбы синусом, замкнутые до низа экрана, бесшовно
+// повторяются при любом сдвиге камеры.
+function hills(ctx, baseY, amp, period, color, offset) {
+  ctx.fillStyle = color;
+  ctx.beginPath();
+  const start = -period - (((offset % period) + period) % period);
+  ctx.moveTo(start, VIEW_HEIGHT);
+  ctx.lineTo(start, baseY);
+  for (let x = start; x <= VIEW_WIDTH + period; x += period) {
+    ctx.quadraticCurveTo(x + period / 2, baseY - amp, x + period, baseY);
   }
-  ctx.globalAlpha = 1;
+  ctx.lineTo(VIEW_WIDTH + period, VIEW_HEIGHT);
+  ctx.closePath();
+  ctx.fill();
 }
 
-function wrap(value, size) {
-  return ((value % size) + size) % size;
+// Облако — три перекрывающихся эллипса.
+function cloud(ctx, x, y, s) {
+  ctx.fillStyle = CLOUD;
+  ctx.beginPath();
+  ctx.ellipse(x, y, 26 * s, 15 * s, 0, 0, Math.PI * 2);
+  ctx.ellipse(x + 24 * s, y + 4 * s, 20 * s, 12 * s, 0, 0, Math.PI * 2);
+  ctx.ellipse(x - 24 * s, y + 5 * s, 18 * s, 11 * s, 0, 0, Math.PI * 2);
+  ctx.fill();
 }
 
-// Свой крошечный ГПСЧ: созвездия должны быть одинаковыми между перезагрузками
-// и не перерисовываться при каждом ресайзе. Настоящий сидируемый rng для
-// генераторов задач появится на Этапе 4, здесь он был бы лишней связью.
-function createStars(count, seed, minRadius, maxRadius, minAlpha, maxAlpha) {
-  let state = seed;
-  const random = () => {
-    state = (state * 1664525 + 1013904223) >>> 0;
-    return state / 4294967296;
-  };
+function wrap(v, size) { return ((v % size) + size) % size; }
 
-  const stars = [];
-  for (let index = 0; index < count; index++) {
-    stars.push({
-      x: random() * VIEW_WIDTH,
-      y: random() * VIEW_HEIGHT,
-      radius: minRadius + random() * (maxRadius - minRadius),
-      alpha: minAlpha + random() * (maxAlpha - minAlpha)
-    });
-  }
-  return stars;
+function rng(seed) {
+  let s = seed;
+  return () => { s = (s * 1664525 + 1013904223) >>> 0; return s / 4294967296; };
+}
+function createStars(n, seed) {
+  const r = rng(seed), a = [];
+  for (let i = 0; i < n; i++) a.push({ x: r() * VIEW_WIDTH, y: r() * VIEW_HEIGHT * 0.34, r: 0.6 + r() * 1.2, alpha: 0.3 + r() * 0.5 });
+  return a;
+}
+function createClouds(n, seed) {
+  const r = rng(seed), a = [];
+  for (let i = 0; i < n; i++) a.push({ x: r() * VIEW_WIDTH, y: VIEW_HEIGHT * (0.12 + r() * 0.35), s: 0.7 + r() * 0.8 });
+  return a;
 }
