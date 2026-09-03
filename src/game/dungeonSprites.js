@@ -3,6 +3,7 @@
 // глазами (смотрят на игрока), приметами вида и лёгким дыханием, и настоящий
 // сундук с крышкой, обручами и замком. Всё детерминированно от позиции + времени
 // (t — секунды, только для анимации, симуляции не касается).
+import { drawCharacter } from '../engine/character.js';
 
 const BODY = {
   chaser: '#e0524a', shooter: '#f0a04b', tank: '#8a3a52', boss: '#b0343f',
@@ -68,7 +69,44 @@ function ring(ctx, r, color, width, extra) {
   ctx.beginPath(); ctx.arc(0, 0, r + extra, 0, Math.PI * 2); ctx.stroke();
 }
 
+// --- Пиксельный рендер ---
+// Модельки рисуются векторно (как ниже), но отдаются на экран через даунсэмпл в
+// маленький буфер и upscale по-соседнему (nearest): вся отрисовка разом получает
+// цельный «ретро»-стиль без перерисовки арта. PX — сколько мировых единиц в одном
+// «пикселе»; крутить тут.
+const PX = 3;
+let _buf = null;
+function pixelate(ctx, cx, cy, size, draw) {
+  const lo = Math.max(6, Math.round(size / PX));
+  if (!_buf) _buf = (typeof OffscreenCanvas !== 'undefined')
+    ? new OffscreenCanvas(lo, lo) : Object.assign(document.createElement('canvas'), { width: lo, height: lo });
+  _buf.width = lo; _buf.height = lo; // смена размера заодно чистит буфер
+  const bx = _buf.getContext('2d');
+  const x0 = cx - size / 2, y0 = cy - size / 2, k = lo / size;
+  bx.save();
+  bx.scale(k, k);
+  bx.translate(-x0, -y0); // рисуем в мировых координатах, но в низком разрешении
+  draw(bx);
+  bx.restore();
+  const smooth = ctx.imageSmoothingEnabled;
+  ctx.imageSmoothingEnabled = false;
+  ctx.drawImage(_buf, x0, y0, size, size); // назад с увеличением — жёсткие пиксели
+  ctx.imageSmoothingEnabled = smooth;
+}
+
 export function drawEnemy(ctx, e, t) {
+  // Коробка захвата с запасом на кольца-приметы, рожки и фитиль.
+  pixelate(ctx, e.x, e.y, 2 * (e.r + 12), (bx) => drawEnemyRaw(bx, e, t));
+}
+
+// Герой данжа тем же пиксельным фильтром, что и враги — чтобы бой был единым
+// стилем. Платформер и гардероб рисуют drawCharacter напрямую и остаются гладкими.
+export function drawHeroPixel(ctx, x, y, w, h, skin, facing) {
+  const cx = x + w / 2, cy = y + h * 0.35, size = h * 1.9; // коробка с запасом на шапку
+  pixelate(ctx, cx, cy, size, (bx) => drawCharacter(bx, x, y, w, h, skin, facing));
+}
+
+function drawEnemyRaw(ctx, e, t) {
   const fx = e.faceX ?? 0, fy = e.faceY ?? 1;
   const charger = e.kind === 'boss' && e.variant === 'charger';
   let base = charger ? CHARGER : (BODY[e.kind] ?? '#e0524a');
@@ -162,6 +200,10 @@ function mouth(ctx, r, y) {
 // Сундук: деревянный корпус, крышка-дуга, золотые обручи, замок и самоцвет предмета
 // с буквой (М/Ф). Лёгкое покачивание, чтобы «звал» открыть.
 export function drawChest(ctx, ch, t) {
+  pixelate(ctx, ch.x, ch.y - 4, 56, (bx) => drawChestRaw(bx, ch, t));
+}
+
+function drawChestRaw(ctx, ch, t) {
   const x = ch.x, y = ch.y;
   const bob = Math.sin(t * 2 + x * 0.03) * 1.2;
   const w = 32, h = 26;

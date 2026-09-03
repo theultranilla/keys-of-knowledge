@@ -30,8 +30,7 @@
     <canvas id="c" width="980" height="620"></canvas>
 
     <script type="module">
-      import { drawEnemy, drawChest } from '../src/game/dungeonSprites.js';
-      import { drawCharacter } from '../src/engine/character.js';
+      import { drawEnemy, drawChest, drawHeroPixel } from '../src/game/dungeonSprites.js';
 
       const c = document.getElementById('c');
       const ctx = c.getContext('2d');
@@ -74,7 +73,7 @@
       ];
       const heroes = heroSkins.map(([label, skin]) => ({ label, draw: (t, cx, cy) => {
         const s = 2.6, w = 22 * s, h = 30 * s;
-        drawCharacter(ctx, cx - w / 2, cy - h / 2, w, h, skin, 1);
+        drawHeroPixel(ctx, cx - w / 2, cy - h / 2, w, h, skin, 1);
       } }));
 
       const cells = [...enemies, ...chests, ...heroes];
