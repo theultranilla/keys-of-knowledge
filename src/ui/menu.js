@@ -40,7 +40,7 @@ export function createMenu({ mount, save, levels, on }) {
         // Марио-режим: превью — сам герой в текущем костюме.
         el('div', { class: 'mode-card' },
           el('div', { class: 'mode-card__art' }, characterCanvas(save.equipped, 72)),
-          el('h3', { class: 'mode-card__name', text: t('menu.mode.platformer.name') }),
+          el('h2', { class: 'mode-card__name', text: t('menu.mode.platformer.name') }),
           el('p', { class: 'mode-card__desc', text: t('menu.mode.platformer.desc') }),
           el('div', { class: 'mode-card__actions' },
             button('screen__button screen__button--primary', t('menu.play'), on.play),
@@ -49,7 +49,7 @@ export function createMenu({ mount, save, levels, on }) {
         // Данж: превью — один из врагов-моделек.
         el('div', { class: 'mode-card' },
           el('div', { class: 'mode-card__art' }, enemyCanvas('chaser', 72)),
-          el('h3', { class: 'mode-card__name', text: t('menu.mode.dungeon.name') }),
+          el('h2', { class: 'mode-card__name', text: t('menu.mode.dungeon.name') }),
           el('p', { class: 'mode-card__desc', text: t('menu.mode.dungeon.desc') }),
           el('div', { class: 'mode-card__actions' },
             button('screen__button screen__button--primary', t('menu.play'), () => on.dungeon()),
@@ -72,7 +72,7 @@ export function createMenu({ mount, save, levels, on }) {
 
   // Маленькое превью врага для карточки данжа (те же модельки, что в бою).
   function enemyCanvas(kind, size) {
-    const canvas = el('canvas', { class: 'wardrobe__preview', width: size, height: size });
+    const canvas = el('canvas', { class: 'wardrobe__preview', width: size, height: size, 'aria-hidden': 'true' });
     const ctx = canvas.getContext('2d');
     drawEnemy(ctx, { x: size / 2, y: size * 0.54, r: size * 0.3, kind, faceX: 0.4, faceY: 0.2, hitFlash: 0 }, 0.6);
     return canvas;
@@ -155,7 +155,7 @@ export function createMenu({ mount, save, levels, on }) {
   // предмет в магазине выглядит ровно так, как потом на уровне. Сверху оставляем
   // место под шапку — она рисуется выше макушки.
   function characterCanvas(skin, size) {
-    const canvas = el('canvas', { class: 'wardrobe__preview', width: size, height: size });
+    const canvas = el('canvas', { class: 'wardrobe__preview', width: size, height: size, 'aria-hidden': 'true' });
     const ctx = canvas.getContext('2d');
     const h = size * 0.55;
     const w = h * (22 / 30);

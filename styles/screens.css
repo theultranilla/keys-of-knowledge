@@ -16,6 +16,8 @@
   padding: 20px;
   background: rgb(10 14 28 / 92%);
   overflow-y: auto;
+  overscroll-behavior: contain; /* прокрутка гардероба не тянет страницу под собой */
+  touch-action: manipulation;   /* без 300мс-задержки тапа в меню на телефоне */
 }
 
 /* Пауза и победа: игра под ними должна оставаться видна — ребёнок помнит,
@@ -252,6 +254,11 @@
   color: var(--amber);
 }
 
+.slider__input:focus-visible {
+  outline: 3px solid var(--amber);
+  outline-offset: 2px;
+}
+
 /* --- Главное меню: две карточки режимов --- */
 .menu-modes {
   display: grid;
@@ -299,6 +306,10 @@
 }
 
 .menu-link {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 40px; /* палец ребёнка на телефоне — цель не меньше ~40px */
   padding: 6px;
   border: none;
   border-radius: 8px;
@@ -520,7 +531,8 @@
 }
 
 .wardrobe__act {
-  padding: 5px 8px;
+  min-height: 38px; /* тач-цель под палец ребёнка */
+  padding: 6px 8px;
   border: 1px solid color-mix(in srgb, var(--chalk) 30%, transparent);
   border-radius: 8px;
   background: transparent;
