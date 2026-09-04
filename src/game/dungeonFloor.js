@@ -239,6 +239,20 @@ export function drawRooms(ctx, floor, t = 0) {
       drawWeaponIcon(ctx, p.x, p.y, p.weaponId);
       continue;
     }
+    if (p.kind === 'power') { // сфера способности с символом
+      const col = p.powerId === 'frost' ? '#78c8ff' : p.powerId === 'heal' ? '#5ac888' : '#9e73ee';
+      ctx.fillStyle = 'rgba(0,0,0,0.28)'; ctx.beginPath(); ctx.ellipse(p.x, p.y + 8, 12, 4, 0, 0, Math.PI * 2); ctx.fill();
+      ctx.fillStyle = col; ctx.beginPath(); ctx.arc(p.x, p.y, 10, 0, Math.PI * 2); ctx.fill();
+      ctx.fillStyle = 'rgba(255,255,255,0.5)'; ctx.beginPath(); ctx.arc(p.x - 3, p.y - 3, 3, 0, Math.PI * 2); ctx.fill();
+      ctx.strokeStyle = '#fff'; ctx.lineWidth = 2; ctx.lineCap = 'round';
+      if (p.powerId === 'nova') { ctx.beginPath(); ctx.arc(p.x, p.y, 5, 0, Math.PI * 2); ctx.stroke(); }
+      else { // плюс (heal) / снежинка (frost)
+        ctx.beginPath(); ctx.moveTo(p.x - 5, p.y); ctx.lineTo(p.x + 5, p.y); ctx.moveTo(p.x, p.y - 5); ctx.lineTo(p.x, p.y + 5);
+        if (p.powerId === 'frost') { ctx.moveTo(p.x - 3.5, p.y - 3.5); ctx.lineTo(p.x + 3.5, p.y + 3.5); ctx.moveTo(p.x - 3.5, p.y + 3.5); ctx.lineTo(p.x + 3.5, p.y - 3.5); }
+        ctx.stroke();
+      }
+      continue;
+    }
     ctx.fillStyle = p.kind === 'coin' ? '#f6d24d' : p.kind === 'bomb' ? '#9e73ee' : '#e0645f';
     ctx.beginPath();
     ctx.arc(p.x, p.y, p.kind === 'bomb' ? 10 : 8, 0, Math.PI * 2);

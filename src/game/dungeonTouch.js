@@ -13,6 +13,7 @@ const RADIUS = 78; // логических пикселей — «вылет» �
 // Рывок ниже (к углу — он нужен чаще), Нова над ним.
 const DASH_BTN = { x: VIEW_WIDTH - 52, y: VIEW_HEIGHT - 52, r: 30 };
 const NOVA_BTN = { x: VIEW_WIDTH - 52, y: VIEW_HEIGHT - 122, r: 30 };
+const SHIELD_BTN = { x: VIEW_WIDTH - 52, y: VIEW_HEIGHT - 192, r: 30 };
 const inBtn = (p, b) => Math.hypot(p.x - b.x, p.y - b.y) <= b.r;
 // Контекстная кнопка «действие» — пилюля снизу по центру, видна и жмётся только
 // когда рядом есть с чем взаимодействовать (иначе не мешает).
@@ -20,10 +21,12 @@ const ACT_BTN = { x: VIEW_WIDTH / 2, y: VIEW_HEIGHT - 56, w: 240, h: 46 };
 const inRect = (p, b) => Math.abs(p.x - b.x) <= b.w / 2 && Math.abs(p.y - b.y) <= b.h / 2;
 
 export function createDungeonTouch({ canvas, input }) {
-  let bombs = 0;             // «Нов» у игрока — счётчик на кнопке
+  let bombs = 0;             // заряды способности — счётчик на кнопке
+  let power = { name: 'Нова', rgb: '158,115,238' }; // текущая способность слота F
   let dashReady = true;      // рывок не на кулдауне — для яркости кнопки
+  let shieldReady = true;    // Щит не на кулдауне
   let interactLabel = null;  // подпись контекстного действия или null
-  let novaId = -1, dashId = -1, actId = -1;
+  let novaId = -1, dashId = -1, shieldId = -1, actId = -1;
   const state = {
     move: { x: 0, y: 0 },
     aim: { x: 0, y: 0 },
@@ -46,6 +49,7 @@ export function createDungeonTouch({ canvas, input }) {
     if (interactLabel && inRect(p, ACT_BTN) && actId < 0) { actId = e.pointerId; input?.setAction('interact', true); return; }
     if (inBtn(p, DASH_BTN) && dashId < 0) { dashId = e.pointerId; input?.setAction('dash', true); return; }
     if (inBtn(p, NOVA_BTN) && novaId < 0) { novaId = e.pointerId; input?.setAction('nova', true); return; }
+    if (inBtn(p, SHIELD_BTN) && shieldId < 0) { shieldId = e.pointerId; input?.setAction('shield', true); return; }
     if (p.x < VIEW_WIDTH / 2 && moveId < 0) {
       moveId = e.pointerId;
       state.moveStick = { baseX: p.x, baseY: p.y, knobX: p.x, knobY: p.y };
@@ -68,6 +72,7 @@ export function createDungeonTouch({ canvas, input }) {
     if (e.pointerId === actId) { actId = -1; input?.setAction('interact', false); }
     else if (e.pointerId === dashId) { dashId = -1; input?.setAction('dash', false); }
     else if (e.pointerId === novaId) { novaId = -1; input?.setAction('nova', false); }
+    else if (e.pointerId === shieldId) { shieldId = -1; input?.setAction('shield', false); }
     else if (e.pointerId === moveId) { moveId = -1; state.move.x = state.move.y = 0; state.moveStick = null; }
     else if (e.pointerId === aimId) { aimId = -1; state.aiming = state.firing = false; state.aim.x = state.aim.y = 0; state.aimStick = null; }
   };
@@ -94,14 +99,17 @@ export function createDungeonTouch({ canvas, input }) {
   return {
     state,
     setBombs(n) { bombs = n; },
+    setPower(p) { power = p; },
     setDashReady(ready) { dashReady = ready; },
+    setShieldReady(ready) { shieldReady = ready; },
     setInteract(label) { interactLabel = label; },
     // Нарисовать джойстики и кнопки поверх сцены (экранные координаты).
     draw(ctx) {
       drawStick(ctx, state.moveStick, 'rgba(120,180,255,');
       drawStick(ctx, state.aimStick, 'rgba(255,180,90,');
       drawButton(ctx, DASH_BTN, 'Рывок', dashReady, '120,180,255');
-      drawButton(ctx, NOVA_BTN, 'Нова ' + bombs, bombs > 0, '158,115,238');
+      drawButton(ctx, NOVA_BTN, power.name + ' ' + bombs, bombs > 0, power.rgb);
+      drawButton(ctx, SHIELD_BTN, 'Щит', shieldReady, '140,215,255');
       if (interactLabel) drawActButton(ctx, interactLabel);
     },
     destroy() {

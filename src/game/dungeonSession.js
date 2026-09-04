@@ -24,6 +24,14 @@ const PLAYER_HP = 6, CONTACT_CD = 0.8, CAM_SMOOTH = 8;
 const BANNER_TIME = 1.6; // сколько держится баннер «Этаж N» при входе
 const COINS_PER_FLOOR = 4; // монет в кошелёк за спуск с этажа (× номер этажа — глубже щедрее)
 const NOVA_FX_TIME = 0.4, NOVA_RADIUS = 260; // ударная волна «Новы»: длительность и радиус
+const SHIELD_TIME = 2.5, SHIELD_CD = 7;      // Щит: секунды неуязвимости и кулдаун
+const FROST_POWER_TIME = 3, HEAL_POWER = 3;  // «Мороз» замораживает всех, «Хил» лечит
+// Способности слота F (сменяются подбором на полу): имя + цвет для кнопки/иконки.
+const POWERS = {
+  nova:  { name: 'Нова',  rgb: '158,115,238' },
+  frost: { name: 'Мороз', rgb: '120,200,255' },
+  heal:  { name: 'Хил',   rgb: '90,200,136' }
+};
 const DASH_SPEED = 620, DASH_TIME = 0.16, DASH_CD = 0.7; // рывок: скорость, длительность (=окно неуязвимости), кулдаун
 const INTERACT_R = 42; // дальность контекстного взаимодействия (E / тач-кнопка)
 const GAMBLE_BET = 8;  // ставка в комнате-казино
@@ -37,7 +45,7 @@ export function createDungeonSession({ input, audio, save, canvas, modal, tasks,
   const player = {
     x: 0, y: 0, width: PLAYER_WIDTH, height: PLAYER_HEIGHT,
     prevX: 0, prevY: 0, aim: { x: 1, y: 0 }, facing: 1,
-    hp: startHp, maxHp: startHp, hurtCd: 0, dmgMul: 1 + bonus.dmgMul, coins: 0, bombs: 1 + bonus.bombs, weapon: 'spark'
+    hp: startHp, maxHp: startHp, hurtCd: 0, dmgMul: 1 + bonus.dmgMul, coins: 0, bombs: 1 + bonus.bombs, weapon: 'spark', power: 'nova'
   };
   let busy = false; // пока открыта карточка задачи — мир стоит
   let dead = false; // игрок погиб — забег заморожен до перезапуска
@@ -50,9 +58,10 @@ export function createDungeonSession({ input, audio, save, canvas, modal, tasks,
   let time = 0; // часы забега — по ним пульсируют ловушки
   let trapsWereOut = false; // для звука выезда шипов — ловим фронт
   let bankedThisRun = 0; // сколько монет забег уже отправил в кошелёк
-  let novaFx = 0; // таймер ударной волны «Новы»
+  let novaFx = 0, novaPower = 'nova'; // таймер и вид ударной волны (для цвета кольца)
   const novaCenter = { x: 0, y: 0 };
   let dashTime = 0, dashCd = 0; // рывок: остаток длительности и кулдаун
+  let shieldTime = 0, shieldCd = 0; // Щит: остаток неуязвимости и кулдаун
   const dashDir = { x: 1, y: 0 };
   let focus = null; // ближайшее взаимодействие: { type, target } или null
   const sparks = [];
@@ -123,6 +132,11 @@ export function createDungeonSession({ input, audio, save, canvas, modal, tasks,
 
     if (dashCd > 0) dashCd -= dt;
     if (input.consumePress('dash') && dashCd <= 0 && dashTime <= 0) startDash();
+    if (shieldCd > 0) shieldCd -= dt;
+    if (shieldTime > 0) shieldTime -= dt;
+    if (input.consumePress('shield') && shieldCd <= 0 && shieldTime <= 0) {
+      shieldTime = SHIELD_TIME; shieldCd = SHIELD_CD; audio?.play?.('key'); // пара секунд неуязвимости
+    }
 
     move(dt);
     clampToRooms();  // страховка: никогда не оказаться за пределами всех комнат
@@ -133,14 +147,8 @@ export function createDungeonSession({ input, audio, save, canvas, modal, tasks,
     if (input.consumePress('interact') && focus) doInteract(focus);
     if (damageTraps()) return; // урон о шипы мог обнулить забег → дальше не трогаем мёртвую сессию
     aimAndFire();
-    // Нова: тратим заряд только если есть по кому бить (пустую комнату не жжём).
-    if (input.consumePress('nova') && player.bombs > 0 && current.enemies.length > 0) {
-      player.bombs--;
-      const c = center();
-      combat.nova(current, c.x, c.y);
-      addShake(8);
-      if (!prefersReducedMotion()) { novaFx = NOVA_FX_TIME; novaCenter.x = c.x; novaCenter.y = c.y; }
-    }
+    // Способность из слота F: тратим заряд только если она сейчас имеет смысл.
+    if (input.consumePress('nova') && player.bombs > 0 && canUsePower()) { player.bombs--; usePower(); }
     if (novaFx > 0) novaFx -= dt;
     combat.update(dt, floor, current, center(), player.dmgMul, player.width / 2);
     updateSparks(dt);
@@ -242,8 +250,31 @@ export function createDungeonSession({ input, audio, save, canvas, modal, tasks,
   }
 
   // Урон игроку (зовёт бой). true — если погиб (забег сброшен).
+  // Способность слота F зависит от текущего player.power (меняется подбором).
+  function canUsePower() {
+    if (player.power === 'heal') return player.hp < player.maxHp; // не жечь заряд впустую
+    return current.enemies.length > 0;                            // нова/мороз — только по врагам
+  }
+  function usePower() {
+    const c = center();
+    novaPower = player.power;
+    if (player.power === 'frost') {
+      for (const e of current.enemies) e.slow = FROST_POWER_TIME; // заморозить всю комнату
+      addShake(4);
+      if (!prefersReducedMotion()) { novaFx = NOVA_FX_TIME; novaCenter.x = c.x; novaCenter.y = c.y; }
+      audio?.play?.('nova');
+    } else if (player.power === 'heal') {
+      player.hp = Math.min(player.maxHp, player.hp + HEAL_POWER);
+      audio?.play?.('correct');
+    } else { // nova
+      combat.nova(current, c.x, c.y); addShake(8);
+      if (!prefersReducedMotion()) { novaFx = NOVA_FX_TIME; novaCenter.x = c.x; novaCenter.y = c.y; }
+      audio?.play?.('nova');
+    }
+  }
+
   function hitPlayer(dmg) {
-    if (player.hurtCd > 0 || dead || dashTime > 0) return false; // рывок даёт кадры неуязвимости
+    if (player.hurtCd > 0 || dead || dashTime > 0 || shieldTime > 0) return false; // рывок и Щит дают неуязвимость
     player.hp = Math.max(0, player.hp - dmg);
     player.hurtCd = CONTACT_CD;
     addShake(7);
@@ -417,6 +448,10 @@ export function createDungeonSession({ input, audio, save, canvas, modal, tasks,
     for (let i = 0; i < n; i++) arr.push({ ...clearSpot(room, it), kind: 'coin', value });
     if (Math.random() < 0.4) arr.push({ ...clearSpot(room, it), kind: 'heal', value: 2 });
     if (Math.random() < 0.18) arr.push({ ...clearSpot(room, it), kind: 'bomb', value: 1 });
+    if (Math.random() < 0.12) { // редкая смена способности слота F
+      const opts = ['nova', 'frost', 'heal'].filter((p) => p !== player.power);
+      arr.push({ ...clearSpot(room, it), kind: 'power', powerId: opts[(Math.random() * opts.length) | 0] });
+    }
     if (Math.random() < 0.14) { // редкий дроп оружия (не совпадает с текущим)
       const opts = WEAPON_DROPS.filter((w) => w !== player.weapon);
       arr.push({ ...clearSpot(room, it), kind: 'weapon', weaponId: opts[(Math.random() * opts.length) | 0] });
@@ -447,6 +482,7 @@ export function createDungeonSession({ input, audio, save, canvas, modal, tasks,
       if (Math.hypot(c.x - p.x, c.y - p.y) > 28) continue;
       if (p.kind === 'coin') player.coins += p.value + coinBonus; // «Удача» добавляет к каждой монете
       else if (p.kind === 'bomb') player.bombs += 1;
+      else if (p.kind === 'power') player.power = p.powerId; // сменить способность слота F
       else player.hp = Math.min(player.maxHp, player.hp + p.value);
       audio?.play?.('coin');
       current.pickups.splice(i, 1);
@@ -492,9 +528,10 @@ export function createDungeonSession({ input, audio, save, canvas, modal, tasks,
     drawTraps(ctx, current, time); // шипы под сущностями — по ним ходят
     combat.draw(ctx, current);
     drawSparks(ctx);
-    if (novaFx > 0) { // расширяющееся кольцо ударной волны
+    if (novaFx > 0) { // расширяющееся кольцо способности (цвет по виду)
       const p = 1 - novaFx / NOVA_FX_TIME;
-      ctx.strokeStyle = `rgba(200,170,255,${(novaFx / NOVA_FX_TIME) * 0.85})`;
+      const rgb = novaPower === 'frost' ? '150,215,255' : '200,170,255';
+      ctx.strokeStyle = `rgba(${rgb},${(novaFx / NOVA_FX_TIME) * 0.85})`;
       ctx.lineWidth = 6;
       ctx.beginPath(); ctx.arc(novaCenter.x, novaCenter.y, p * NOVA_RADIUS, 0, Math.PI * 2); ctx.stroke();
     }
@@ -522,6 +559,12 @@ export function createDungeonSession({ input, audio, save, canvas, modal, tasks,
     ctx.strokeStyle = 'rgba(242,168,59,0.4)'; ctx.lineWidth = 2; ctx.lineCap = 'round';
     ctx.beginPath(); ctx.moveTo(cx + player.aim.x * 15, cy + player.aim.y * 15); ctx.lineTo(cx + player.aim.x * 30, cy + player.aim.y * 30); ctx.stroke();
     drawWeapon(ctx, cx, cy, player.aim.x, player.aim.y, player.weapon, muzzle);
+    if (shieldTime > 0) { // пузырь Щита — неуязвимость
+      const a = prefersReducedMotion() ? 0.5 : 0.32 + Math.sin(time * 10) * 0.16;
+      ctx.fillStyle = 'rgba(120,200,255,0.12)'; ctx.beginPath(); ctx.arc(cx, cy, player.width * 1.15, 0, Math.PI * 2); ctx.fill();
+      ctx.strokeStyle = `rgba(140,215,255,${a})`; ctx.lineWidth = 3;
+      ctx.beginPath(); ctx.arc(cx, cy, player.width * 1.15, 0, Math.PI * 2); ctx.stroke();
+    }
 
     // Подсказка взаимодействия над героем (клавиша E на ПК; на телефоне — тач-кнопка).
     if (focus) {
@@ -547,9 +590,11 @@ export function createDungeonSession({ input, audio, save, canvas, modal, tasks,
     else drawEnemiesLeft(ctx, activeCombat ? current.enemies.length : 0);
     drawFloorBanner(ctx, floor.floorNumber, bannerTime / 0.5); // альфа>1 держит баннер, <1 гасит
     touch.setBombs(player.bombs);
+    touch.setPower(POWERS[player.power] ?? POWERS.nova); // подпись/цвет кнопки способности
     touch.setDashReady(dashCd <= 0);
+    touch.setShieldReady(shieldCd <= 0);
     touch.setInteract(focus ? focusLabel() : null); // контекстная кнопка — только когда есть с чем
-    touch.draw(ctx); // джойстики + кнопки «Рывок»/«Нова»/«Действие» поверх
+    touch.draw(ctx); // джойстики + кнопки «Рывок»/«Щит»/способность/«Действие» поверх
   }
 
   function drawSparks(ctx) {

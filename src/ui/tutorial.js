@@ -21,6 +21,7 @@ const CONTROLS = {
     [['🖱'], 'howto.d.aim'],
     [['Shift'], 'howto.d.dash'],
     [['F'], 'howto.d.nova'],
+    [['Q'], 'howto.d.shield'],
     [['Tab'], 'howto.d.swap'],
     [['E'], 'howto.d.interact'],
     [['Esc'], 'howto.common.pause']
