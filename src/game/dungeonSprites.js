@@ -78,11 +78,17 @@ function smile(ctx, r, y, w, curve, ph = 0) {
 }
 function fangs(ctx, r, y, ph = 0) {
   const open = r * (0.16 + (Math.sin(ph) * 0.5 + 0.5) * 0.14);
-  ctx.fillStyle = INK; rr(ctx, -r * 0.3, y, r * 0.6, open, r * 0.08); ctx.fill();
+  // Чистый оскал: тёмная дуга-рот (линза) + два ровных клыка сверху.
+  ctx.fillStyle = INK;
+  ctx.beginPath();
+  ctx.moveTo(-r * 0.32, y);
+  ctx.quadraticCurveTo(0, y + open * 1.7, r * 0.32, y);
+  ctx.quadraticCurveTo(0, y + open * 0.35, -r * 0.32, y);
+  ctx.closePath(); ctx.fill();
   ctx.fillStyle = '#fff';
   for (const s of [-1, 1]) {
     ctx.beginPath();
-    ctx.moveTo(s * r * 0.2, y); ctx.lineTo(s * r * 0.08, y); ctx.lineTo(s * r * 0.14, y + open * 0.7);
+    ctx.moveTo(s * r * 0.19, y + 0.5); ctx.lineTo(s * r * 0.07, y + 0.5); ctx.lineTo(s * r * 0.13, y + open * 0.95);
     ctx.closePath(); ctx.fill();
   }
 }
@@ -136,17 +142,20 @@ export function drawEnemy(ctx, e, t) {
     brows(ctx, r, true, bph);
     fangs(ctx, r, r * 0.36, mph);
   } else if (e.kind === 'shooter') {
-    body(ctx, r, col, wob);
-    ctx.save(); ctx.rotate(ang); // чистое дуло по направлению взгляда
-    ctx.fillStyle = shade(base, 0.4); rr(ctx, r * 0.55, -r * 0.16, r * 0.75, r * 0.32, r * 0.1); ctx.fill();
+    ctx.save(); ctx.rotate(ang); // короткая пушка с дулом (не палка), у самого тела
+    ctx.fillStyle = shade(base, 0.5); rr(ctx, r * 0.6, -r * 0.2, r * 0.5, r * 0.4, r * 0.14); ctx.fill();
+    ctx.fillStyle = shade(base, 0.68); circle(ctx, r * 1.06, 0, r * 0.19);
     ctx.restore();
+    body(ctx, r, col, wob);
     eyes(ctx, r, fx, fy, { count: 1, size: 0.42, open: blink });
     brows(ctx, r, true, bph);
   } else if (e.kind === 'tank') {
     body(ctx, r, col, wob * 0.5);
-    ctx.fillStyle = shade(base, 0.5); // ровная броневая полоса поперёк
-    rr(ctx, -r * 0.72, r * 0.12, r * 1.44, r * 0.34, r * 0.1); ctx.fill();
-    ctx.fillStyle = 'rgba(255,255,255,0.12)'; rr(ctx, -r * 0.72, r * 0.12, r * 1.44, r * 0.08, r * 0.06); ctx.fill();
+    ctx.fillStyle = shade(base, 0.5); // броневая пластина с бликом и заклёпками — читается как броня
+    rr(ctx, -r * 0.72, r * 0.14, r * 1.44, r * 0.34, r * 0.1); ctx.fill();
+    ctx.fillStyle = 'rgba(255,255,255,0.14)'; rr(ctx, -r * 0.72, r * 0.14, r * 1.44, r * 0.08, r * 0.06); ctx.fill();
+    ctx.fillStyle = shade(base, 0.7);
+    for (const s of [-1, 1]) circle(ctx, s * r * 0.52, r * 0.31, r * 0.05);
     eyes(ctx, r, fx, fy, { size: 0.18, open: blink });
     brows(ctx, r, true, bph);
   } else if (e.kind === 'bomber') {
