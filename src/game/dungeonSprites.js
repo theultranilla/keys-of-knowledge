@@ -1,16 +1,15 @@
-// Мультяшные «модельки» данжа в коде: без ассетов, только Canvas 2D. Каждый враг —
-// чистое круглое существо в одном стиле с героем: обводка, тень снизу, блик сверху,
-// симметричное лицо (глаза со зрачком и бликом следят за игроком) и ОДНА чёткая
-// примета вида. Никаких мелких деталей под углами — от них была «кривизна». Тело
-// дышит, рот и брови двигаются. Всё детерминированно от позиции + времени (t —
-// секунды, только анимация). Сундук — деревянный, с самоцветом предмета.
+// Мультяшные монстры данжа в коде: та же модель, что у героя — большая голова +
+// тельце + ручки-ножки, обводка/тень/блик, аккуратное симметричное лицо. Глаза
+// СТАБИЛЬНЫЕ (смотрят влево/центр/вправо ступенькой, а не плывут за игроком), зато
+// рот и брови ЗАМЕТНО двигаются. У каждого вида — свой цвет и одна примета. Ноль
+// ассетов. t — секунды, только анимация. Сундук — деревянный, с самоцветом.
 
 const BODY = {
   chaser: '#e0524a', shooter: '#f0a04b', tank: '#8a3a52', boss: '#b0343f',
   bomber: '#e0902f', splitter: '#5ad06a', healer: '#dfa0d0'
 };
 const CHARGER = '#d1552b', MINI = '#c77dff';
-const INK = '#231a2e'; // тёмные черты лица
+const INK = '#231a2e';
 
 function rr(ctx, x, y, w, h, r) {
   const k = Math.min(r, w / 2, h / 2);
@@ -27,85 +26,106 @@ function shade(hex, f) {
   return `rgb(${c((n >> 16) & 255)},${c((n >> 8) & 255)},${c(n & 255)})`;
 }
 const circle = (ctx, x, y, r) => { ctx.beginPath(); ctx.arc(x, y, r, 0, Math.PI * 2); ctx.fill(); };
+const ell = (ctx, x, y, rx, ry) => { ctx.beginPath(); ctx.ellipse(x, y, rx, ry, 0, 0, Math.PI * 2); ctx.fill(); };
 
-// Круглое тело в стиле героя: обводка-подложка, заливка, тень снизу, блик сверху.
-function body(ctx, r, col, wob) {
-  ctx.save();
-  ctx.scale(1 - wob * 0.4, 1 + wob);
-  ctx.fillStyle = shade(col, 0.42); circle(ctx, 0, 0, r);
-  ctx.fillStyle = col; circle(ctx, 0, 0, r - Math.max(1.5, r * 0.07));
-  ctx.fillStyle = shade(col, 0.15);
-  ctx.beginPath(); ctx.arc(0, r * 0.28, r * 0.8, 0.15 * Math.PI, 0.85 * Math.PI); ctx.fill();
-  ctx.fillStyle = 'rgba(255,255,255,0.4)';
-  ctx.beginPath(); ctx.ellipse(-r * 0.34, -r * 0.36, r * 0.3, r * 0.18, -0.5, 0, Math.PI * 2); ctx.fill();
-  ctx.restore();
+// Геометрия монстра (как у героя): голова сверху, тельце ниже. Всё от центра e.
+function geom(r) {
+  const headR = r * 0.72, headY = -r * 0.34;
+  const bodyW = r * 0.94, bodyTop = headY + headR * 0.55, bodyBot = r * 0.74;
+  return { headR, headY, bodyW, bodyTop, bodyH: bodyBot - bodyTop, footY: r * 0.82, unit: Math.max(1.5, r * 0.07) };
 }
 
-// Глаза, следящие за игроком (fx,fy) — как у героя. count=1 — циклоп.
-function eyes(ctx, r, fx, fy, { count = 2, size = 0.26, open = 1, calm = false } = {}) {
-  const px = -fy, py = fx;
-  const cxf = fx * r * 0.1, cyf = fy * r * 0.1 - r * 0.04;
-  const sep = count === 1 ? 0 : r * 0.42, er = r * size;
+// Общий силуэт: ножки, ручки, тельце, голова — в стиле героя (обводка+тень+блик).
+// armFn(side) может нарисовать особую руку (пушку); иначе обычная культя.
+function chibiBody(ctx, r, col, g, breath, armFn) {
+  const arm = shade(col, 0.12), foot = shade(col, 0.5), dkc = shade(col, 0.42);
+  // ножки
+  ctx.fillStyle = foot;
+  for (const s of [-1, 1]) ell(ctx, s * r * 0.26, g.footY, r * 0.19, r * 0.12);
+  // ручки (или особые)
+  for (const s of [-1, 1]) {
+    if (armFn && armFn(ctx, s, g, r)) continue;
+    ctx.fillStyle = arm; ell(ctx, s * g.bodyW * 0.6, g.bodyTop + g.bodyH * 0.42, r * 0.16, r * 0.13);
+  }
+  // тельце
+  ctx.fillStyle = dkc; rr(ctx, -g.bodyW / 2, g.bodyTop, g.bodyW, g.bodyH, g.bodyW * 0.32); ctx.fill();
+  ctx.fillStyle = col; rr(ctx, -g.bodyW / 2 + g.unit, g.bodyTop + g.unit, g.bodyW - 2 * g.unit, g.bodyH - 2 * g.unit, g.bodyW * 0.3); ctx.fill();
+  ctx.fillStyle = shade(col, 0.14); ell(ctx, 0, g.bodyTop + g.bodyH * 0.78, g.bodyW * 0.42, g.bodyH * 0.28);
+  // голова (с дыханием)
+  const hy = g.headY + breath;
+  ctx.fillStyle = dkc; circle(ctx, 0, hy, g.headR);
+  ctx.fillStyle = col; circle(ctx, 0, hy, g.headR - g.unit);
+  ctx.fillStyle = shade(col, 0.14);
+  ctx.beginPath(); ctx.arc(0, hy + g.headR * 0.28, g.headR * 0.78, 0.15 * Math.PI, 0.85 * Math.PI); ctx.fill();
+  ctx.fillStyle = 'rgba(255,255,255,0.4)'; ell(ctx, -g.headR * 0.34, hy - g.headR * 0.36, g.headR * 0.3, g.headR * 0.18);
+  return hy;
+}
+
+// Стабильные глаза на голове (радиус hr, центр 0,0 — контекст уже у головы).
+// lookX ∈ {-1,0,1} — ступенчатый взгляд влево/центр/вправо, не плывёт.
+function eyes(ctx, hr, lookX, { count = 2, size = 0.3, open = 1, calm = false } = {}) {
+  const sep = count === 1 ? 0 : hr * 0.42, er = hr * size, ey = hr * 0.04;
   for (let s = count === 1 ? 0 : -1; s <= 1; s += 2) {
-    const ex = cxf + px * sep * s, ey = cyf + py * sep * s;
+    const ex = s * sep;
     ctx.fillStyle = '#fbfbff';
     ctx.save(); ctx.translate(ex, ey); ctx.scale(1, Math.max(0.1, open)); circle(ctx, 0, 0, er); ctx.restore();
     const pr = calm ? er * 0.42 : er * 0.56;
-    ctx.fillStyle = INK; circle(ctx, ex + fx * er * 0.34, ey + fy * er * 0.34, pr);
-    ctx.fillStyle = 'rgba(255,255,255,0.92)'; circle(ctx, ex + fx * er * 0.34 - pr * 0.35, ey + fy * er * 0.34 - pr * 0.35, pr * 0.3);
+    const px = ex + lookX * er * 0.4, py = ey + er * 0.18;
+    ctx.fillStyle = INK; circle(ctx, px, py, pr);
+    ctx.fillStyle = 'rgba(255,255,255,0.92)'; circle(ctx, px - pr * 0.34, py - pr * 0.34, pr * 0.3);
     if (s === 0) break;
   }
 }
 
-// Две симметричные брови; ph — подрагивание, у злых хмурятся сильнее.
-function brows(ctx, r, angry, ph = 0) {
-  ctx.strokeStyle = INK; ctx.lineWidth = Math.max(2, r * 0.1); ctx.lineCap = 'round';
-  const y = -r * 0.42 + Math.sin(ph) * r * 0.05;
-  const flex = angry ? (Math.sin(ph * 0.7) * 0.5 + 0.5) * r * 0.05 : 0;
+// Брови — ЗАМЕТНО ходят вверх-вниз; у злых внутренние концы опускаются (хмурятся).
+function brows(ctx, hr, angry, ph) {
+  ctx.strokeStyle = INK; ctx.lineWidth = Math.max(2, hr * 0.14); ctx.lineCap = 'round';
+  const bob = Math.sin(ph) * hr * 0.16;
+  const furrow = angry ? (Math.sin(ph) * 0.5 + 0.5) * hr * 0.16 : 0;
+  const y = -hr * 0.44 + bob;
   for (const s of [-1, 1]) {
     ctx.beginPath();
-    ctx.moveTo(s * r * 0.14, y + (angry ? r * 0.13 + flex : -r * 0.02));
-    ctx.lineTo(s * r * 0.42, y + (angry ? -r * 0.04 : -r * 0.08));
+    ctx.moveTo(s * hr * 0.16, y + (angry ? hr * 0.16 + furrow : -hr * 0.02));
+    ctx.lineTo(s * hr * 0.5, y + (angry ? -hr * 0.06 : -hr * 0.1));
     ctx.stroke();
   }
 }
 
-// Ротики — все симметричные.
-function smile(ctx, r, y, w, curve, ph = 0) {
-  ctx.strokeStyle = INK; ctx.lineWidth = Math.max(2, r * 0.09); ctx.lineCap = 'round';
-  const c = curve * (1 + Math.sin(ph) * 0.28);
+// Рты — ЗАМЕТНАЯ анимация.
+function smile(ctx, hr, y, w, curve, ph) {
+  ctx.strokeStyle = INK; ctx.lineWidth = Math.max(2, hr * 0.11); ctx.lineCap = 'round';
+  const c = curve * (1 + Math.sin(ph) * 0.5);
   ctx.beginPath(); ctx.moveTo(-w, y); ctx.quadraticCurveTo(0, y + c, w, y); ctx.stroke();
 }
-function fangs(ctx, r, y, ph = 0) {
-  const open = r * (0.16 + (Math.sin(ph) * 0.5 + 0.5) * 0.14);
-  // Чистый оскал: тёмная дуга-рот (линза) + два ровных клыка сверху.
+function fangs(ctx, hr, y, ph) {
+  const open = hr * (0.18 + (Math.sin(ph) * 0.5 + 0.5) * 0.34); // широко чавкает
   ctx.fillStyle = INK;
   ctx.beginPath();
-  ctx.moveTo(-r * 0.32, y);
-  ctx.quadraticCurveTo(0, y + open * 1.7, r * 0.32, y);
-  ctx.quadraticCurveTo(0, y + open * 0.35, -r * 0.32, y);
-  ctx.closePath(); ctx.fill();
+  ctx.moveTo(-hr * 0.36, y); ctx.quadraticCurveTo(0, y + open * 1.5, hr * 0.36, y);
+  ctx.quadraticCurveTo(0, y + open * 0.3, -hr * 0.36, y); ctx.closePath(); ctx.fill();
   ctx.fillStyle = '#fff';
-  for (const s of [-1, 1]) {
-    ctx.beginPath();
-    ctx.moveTo(s * r * 0.19, y + 0.5); ctx.lineTo(s * r * 0.07, y + 0.5); ctx.lineTo(s * r * 0.13, y + open * 0.95);
-    ctx.closePath(); ctx.fill();
-  }
+  for (const s of [-1, 1]) { ctx.beginPath(); ctx.moveTo(s * hr * 0.2, y + 0.5); ctx.lineTo(s * hr * 0.08, y + 0.5); ctx.lineTo(s * hr * 0.14, y + open * 0.85); ctx.closePath(); ctx.fill(); }
 }
-function mouthO(ctx, r, y, ph = 0) { // круглый «ой»-ротик
-  ctx.fillStyle = INK; circle(ctx, 0, y, r * (0.11 + (Math.sin(ph) * 0.5 + 0.5) * 0.05));
+function mouthO(ctx, hr, y, ph) {
+  ctx.fillStyle = INK; ell(ctx, 0, y, hr * 0.14, hr * (0.1 + (Math.sin(ph) * 0.5 + 0.5) * 0.12));
 }
 
-// Пара симметричных рожек вверх-в стороны.
-function horns(ctx, r, col) {
+function horns(ctx, hr, hy, col) {
   ctx.fillStyle = col;
   for (const s of [-1, 1]) {
     ctx.beginPath();
-    ctx.moveTo(s * r * 0.56, -r * 0.52);
-    ctx.lineTo(s * r * 0.26, -r * 0.5);
-    ctx.lineTo(s * r * 0.44, -r * 1.02);
+    ctx.moveTo(s * hr * 0.58, hy - hr * 0.55); ctx.lineTo(s * hr * 0.28, hy - hr * 0.52); ctx.lineTo(s * hr * 0.46, hy - hr * 1.08);
     ctx.closePath(); ctx.fill();
   }
+}
+
+// Рука-пушка (для стрелка/боссов): культя + короткий ствол с дулом в сторону side.
+function gunArm(ctx, side, g, r, base) {
+  const ax = side * g.bodyW * 0.6, ay = g.bodyTop + g.bodyH * 0.4;
+  ctx.fillStyle = shade(base, 0.12); ell(ctx, ax, ay, r * 0.15, r * 0.13);
+  ctx.fillStyle = shade(base, 0.5); rr(ctx, ax + side * r * 0.02 - (side < 0 ? r * 0.5 : 0), ay - r * 0.12, r * 0.5, r * 0.24, r * 0.08); ctx.fill();
+  ctx.fillStyle = shade(base, 0.68); circle(ctx, ax + side * r * 0.52, ay, r * 0.11);
+  return true;
 }
 
 function ring(ctx, r, color, width, extra) {
@@ -114,93 +134,83 @@ function ring(ctx, r, color, width, extra) {
 }
 
 export function drawEnemy(ctx, e, t) {
-  const fx = e.faceX ?? 0, fy = e.faceY ?? 1;
+  const fx = e.faceX ?? 0;
   const charger = e.kind === 'boss' && e.variant === 'charger';
   let base = charger ? CHARGER : (BODY[e.kind] ?? '#e0524a');
   if (e.mini) base = MINI;
   const col = e.hitFlash > 0 ? '#ffffff' : base;
   const dark = e.hitFlash > 0 ? '#ffffff' : shade(base, 0.28);
-  const r = e.r;
-  const wob = Math.sin(t * 3 + e.x * 0.05) * 0.05;
-  const blink = ((Math.sin(t * 1.6 + e.y * 0.1) + 1) / 2) > 0.94 ? 0.12 : 1;
-  const ang = Math.atan2(fy, fx);
-  const mph = t * 5 + e.x * 0.13, bph = t * 3 + e.y * 0.11;
+  const r = e.r, g = geom(r);
+  const look = fx > 0.3 ? 1 : fx < -0.3 ? -1 : 0;          // ступенчатый взгляд — не плывёт
+  const breath = Math.sin(t * 3 + e.x * 0.05) * r * 0.03;
+  const blink = ((Math.sin(t * 1.6 + e.y * 0.1) + 1) / 2) > 0.93 ? 0.12 : 1;
+  const mph = t * 5 + e.x * 0.13, bph = t * 3.2 + e.y * 0.11;
 
   ctx.save();
   ctx.translate(e.x, e.y);
 
-  // кольца-приметы — под телом
-  if (e.elite) ring(ctx, r, '#f6d24d', 3, 4);
-  if (charger && e.chargeState === 'wind') ring(ctx, r, '#ffe08a', 3, 7);
-  if (e.kind === 'boss' && e.enraged) ring(ctx, r, '#ff5a4b', 3, 9);
-  if (e.kind === 'boss' && e.variant === 'gunner' && e.burstCd > 0 && e.burstCd < 0.28) ring(ctx, r, '#ffe08a', 3, 6);
+  if (e.elite) ring(ctx, r, '#f6d24d', 3, 5);
+  if (charger && e.chargeState === 'wind') ring(ctx, r, '#ffe08a', 3, 8);
+  if (e.kind === 'boss' && e.enraged) ring(ctx, r, '#ff5a4b', 3, 10);
+  if (e.kind === 'boss' && e.variant === 'gunner' && e.burstCd > 0 && e.burstCd < 0.28) ring(ctx, r, '#ffe08a', 3, 7);
 
-  if (e.kind === 'chaser') {
-    horns(ctx, r, dark);
-    body(ctx, r, col, wob);
-    eyes(ctx, r, fx, fy, { open: blink });
-    brows(ctx, r, true, bph);
-    fangs(ctx, r, r * 0.36, mph);
-  } else if (e.kind === 'shooter') {
-    ctx.save(); ctx.rotate(ang); // короткая пушка с дулом (не палка), у самого тела
-    ctx.fillStyle = shade(base, 0.5); rr(ctx, r * 0.6, -r * 0.2, r * 0.5, r * 0.4, r * 0.14); ctx.fill();
-    ctx.fillStyle = shade(base, 0.68); circle(ctx, r * 1.06, 0, r * 0.19);
-    ctx.restore();
-    body(ctx, r, col, wob);
-    eyes(ctx, r, fx, fy, { count: 1, size: 0.42, open: blink });
-    brows(ctx, r, true, bph);
-  } else if (e.kind === 'tank') {
-    body(ctx, r, col, wob * 0.5);
-    ctx.fillStyle = shade(base, 0.5); // броневая пластина с бликом и заклёпками — читается как броня
-    rr(ctx, -r * 0.72, r * 0.14, r * 1.44, r * 0.34, r * 0.1); ctx.fill();
-    ctx.fillStyle = 'rgba(255,255,255,0.14)'; rr(ctx, -r * 0.72, r * 0.14, r * 1.44, r * 0.08, r * 0.06); ctx.fill();
-    ctx.fillStyle = shade(base, 0.7);
-    for (const s of [-1, 1]) circle(ctx, s * r * 0.52, r * 0.31, r * 0.05);
-    eyes(ctx, r, fx, fy, { size: 0.18, open: blink });
-    brows(ctx, r, true, bph);
-  } else if (e.kind === 'bomber') {
-    ring(ctx, r, '#ffcaa0', 2, 4);
-    body(ctx, r, col, wob + Math.abs(Math.sin(t * 8)) * 0.05);
-    ctx.strokeStyle = '#3a2a12'; ctx.lineWidth = Math.max(2, r * 0.12); ctx.lineCap = 'round'; // фитиль по центру
-    ctx.beginPath(); ctx.moveTo(0, -r * 0.88); ctx.quadraticCurveTo(0, -r * 1.2, r * 0.16, -r * 1.36); ctx.stroke();
-    ctx.fillStyle = ((Math.sin(t * 12) + 1) / 2) > 0.5 ? '#ffd23a' : '#ff7a3a';
-    circle(ctx, r * 0.16, -r * 1.42, r * 0.15);
-    eyes(ctx, r, fx, fy, { size: 0.28, open: blink });
-    mouthO(ctx, r, r * 0.42, mph);
-  } else if (e.kind === 'splitter') {
-    body(ctx, r, col, wob * 1.5);
-    ctx.strokeStyle = shade(base, 0.4); ctx.lineWidth = Math.max(2, r * 0.09); // ровный шов
-    ctx.beginPath(); ctx.moveTo(0, -r * 0.72); ctx.lineTo(0, r * 0.72); ctx.stroke();
-    eyes(ctx, r, fx, fy, { size: 0.22, open: blink });
-    smile(ctx, r, r * 0.36, r * 0.24, r * 0.2, mph);
-  } else if (e.kind === 'healer') {
-    ctx.strokeStyle = 'rgba(255,255,255,0.7)'; ctx.lineWidth = Math.max(2, r * 0.09); // нимб
-    ctx.beginPath(); ctx.ellipse(0, -r * 0.95, r * 0.5, r * 0.16, 0, 0, Math.PI * 2); ctx.stroke();
-    body(ctx, r, col, wob);
-    ctx.fillStyle = '#fff'; // ровный плюс
-    rr(ctx, -r * 0.1, -r * 0.32, r * 0.2, r * 0.64, r * 0.05); ctx.fill();
-    rr(ctx, -r * 0.32, -r * 0.1, r * 0.64, r * 0.2, r * 0.05); ctx.fill();
-    eyes(ctx, r, fx, fy, { size: 0.2, open: blink * 0.5, calm: true });
-    smile(ctx, r, r * 0.44, r * 0.2, r * 0.14, mph);
-  } else if (e.kind === 'boss') {
-    if (charger) horns(ctx, r, dark);
-    body(ctx, r, col, wob * 0.6);
-    if (e.variant === 'gunner') {
-      ctx.save(); ctx.rotate(ang); // два симметричных дула
-      ctx.fillStyle = shade(base, 0.5);
-      for (const s of [-1, 1]) { rr(ctx, r * 0.5, s * r * 0.42 - r * 0.11, r * 0.62, r * 0.22, r * 0.08); ctx.fill(); }
-      ctx.restore();
-      eyes(ctx, r, fx, fy, { count: 1, size: 0.36, open: blink });
-      brows(ctx, r, true, bph);
-    } else {
-      eyes(ctx, r, fx, fy, { size: 0.2, open: blink });
-      brows(ctx, r, true, bph);
-      fangs(ctx, r, r * 0.42, mph);
-    }
-  } else {
-    body(ctx, r, col, wob);
-    eyes(ctx, r, fx, fy, { open: blink });
+  const isShooter = e.kind === 'shooter';
+  const isGunner = e.kind === 'boss' && e.variant === 'gunner';
+  const armFn = isShooter ? ((c, s) => (s === (look >= 0 ? 1 : -1)) && gunArm(c, s, g, r, base))
+    : isGunner ? ((c, s) => gunArm(c, s, g, r, base)) : null;
+
+  const hy = chibiBody(ctx, r, col, g, breath, armFn);
+
+  if (e.kind === 'chaser' || (e.kind === 'boss' && charger)) horns(ctx, g.headR, hy, dark);
+  if (e.kind === 'bomber') { // фитиль на макушке
+    ctx.strokeStyle = '#3a2a12'; ctx.lineWidth = Math.max(2, r * 0.1); ctx.lineCap = 'round';
+    ctx.beginPath(); ctx.moveTo(0, hy - g.headR * 0.95); ctx.quadraticCurveTo(0, hy - g.headR * 1.35, g.headR * 0.24, hy - g.headR * 1.5); ctx.stroke();
+    ctx.fillStyle = ((Math.sin(t * 12) + 1) / 2) > 0.5 ? '#ffd23a' : '#ff7a3a'; circle(ctx, g.headR * 0.24, hy - g.headR * 1.56, r * 0.13);
   }
+  if (e.kind === 'healer') { // нимб
+    ctx.strokeStyle = 'rgba(255,255,255,0.7)'; ctx.lineWidth = Math.max(2, r * 0.08);
+    ctx.beginPath(); ctx.ellipse(0, hy - g.headR * 1.2, g.headR * 0.55, g.headR * 0.16, 0, 0, Math.PI * 2); ctx.stroke();
+    ctx.fillStyle = '#fff'; // плюс на тельце
+    rr(ctx, -g.bodyW * 0.1, g.bodyTop + g.bodyH * 0.2, g.bodyW * 0.2, g.bodyH * 0.6, r * 0.05); ctx.fill();
+    rr(ctx, -g.bodyW * 0.28, g.bodyTop + g.bodyH * 0.4, g.bodyW * 0.56, g.bodyH * 0.2, r * 0.05); ctx.fill();
+  }
+  if (e.kind === 'tank') { // броневая пластина на тельце с заклёпками
+    ctx.fillStyle = shade(base, 0.5); rr(ctx, -g.bodyW * 0.5, g.bodyTop + g.bodyH * 0.32, g.bodyW, g.bodyH * 0.3, r * 0.08); ctx.fill();
+    ctx.fillStyle = shade(base, 0.72);
+    for (const s of [-1, 1]) circle(ctx, s * g.bodyW * 0.32, g.bodyTop + g.bodyH * 0.47, r * 0.045);
+  }
+  if (e.kind === 'splitter') { // шов деления по голове и тельцу
+    ctx.strokeStyle = shade(base, 0.4); ctx.lineWidth = Math.max(2, r * 0.08); ctx.lineCap = 'round';
+    ctx.beginPath(); ctx.moveTo(0, hy - g.headR * 0.7); ctx.lineTo(0, g.bodyTop + g.bodyH * 0.9); ctx.stroke();
+  }
+
+  // лицо на голове
+  ctx.save(); ctx.translate(0, hy);
+  const hr = g.headR;
+  const single = isShooter || isGunner;
+  if (single) {
+    eyes(ctx, hr, look, { count: 1, size: 0.44, open: blink });
+    brows(ctx, hr, true, bph);
+  } else if (e.kind === 'healer') {
+    eyes(ctx, hr, look, { size: 0.26, open: blink * 0.5, calm: true });
+    smile(ctx, hr, hr * 0.5, hr * 0.26, hr * 0.16, mph);
+  } else if (e.kind === 'bomber') {
+    eyes(ctx, hr, look, { size: 0.32, open: blink });
+    mouthO(ctx, hr, hr * 0.5, mph);
+  } else if (e.kind === 'splitter') {
+    eyes(ctx, hr, look, { size: 0.28, open: blink });
+    smile(ctx, hr, hr * 0.44, hr * 0.3, hr * 0.22, mph);
+  } else if (e.kind === 'chaser' || charger) {
+    eyes(ctx, hr, look, { size: 0.3, open: blink });
+    brows(ctx, hr, true, bph);
+    fangs(ctx, hr, hr * 0.44, mph);
+  } else if (e.kind === 'tank') {
+    eyes(ctx, hr, look, { size: 0.24, open: blink });
+    brows(ctx, hr, true, bph);
+  } else {
+    eyes(ctx, hr, look, { open: blink });
+  }
+  ctx.restore();
 
   ctx.restore();
 }
