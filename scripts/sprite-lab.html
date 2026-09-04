@@ -32,6 +32,7 @@
     <script type="module">
       import { drawEnemy, drawChest } from '../src/game/dungeonSprites.js';
       import { drawCharacter } from '../src/engine/character.js';
+      import { drawWeapon, drawShot } from '../src/game/dungeonWeapons.js';
 
       const c = document.getElementById('c');
       const ctx = c.getContext('2d');
@@ -77,7 +78,14 @@
         drawCharacter(ctx, cx - w / 2, cy - h / 2, w, h, skin, 1);
       } }));
 
-      const cells = [...enemies, ...chests, ...heroes];
+      // Оружие: моделька в руке (наведена вправо, стреляет) + снаряд рядом.
+      const WSTYLE = { spark: 'spark', spread: 'spread', rapid: 'rapid', heavy: 'heavy', laser: 'laser', shotgun: 'shot', homing: 'homing', frost: 'frost' };
+      const weapons = Object.keys(WSTYLE).map((id) => ({ label: id, draw: (t, cx, cy) => {
+        drawWeapon(ctx, cx - 16, cy, 1, 0, id, (Math.sin(t * 7) > 0.5) ? 1 : 0);
+        drawShot(ctx, { x: cx + 22, y: cy, vx: 300, vy: 0, r: id === 'heavy' ? 9 : 5, style: WSTYLE[id] });
+      } }));
+
+      const cells = [...enemies, ...chests, ...heroes, ...weapons];
 
       const COLS = 6, CELL = 150, PAD = 20;
       let last = performance.now(), frames = 0, fpsT = 0, fps = 0;

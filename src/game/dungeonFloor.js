@@ -1,5 +1,6 @@
 import { TILE, PALETTE } from '../engine/constants.js';
 import { drawChest } from './dungeonSprites.js';
+import { drawWeaponIcon } from './dungeonWeapons.js';
 import { roundedRect } from '../engine/shapes.js';
 
 // Раскладка этажа-подземелья: комнаты на сетке, соединённые дверями (как в Soul
@@ -234,11 +235,8 @@ export function drawRooms(ctx, floor, t = 0) {
   }
   // пикапы (монеты/лечение), выпавшие с боёв
   for (const room of floor.rooms) if (room.pickups) for (const p of room.pickups) {
-    if (p.kind === 'weapon') { // «ствол» — сразу читается как оружие
-      ctx.fillStyle = '#57d6c4';
-      ctx.fillRect(p.x - 10, p.y - 4, 20, 8);
-      ctx.fillStyle = '#0c1226';
-      ctx.fillRect(p.x + 4, p.y - 2, 5, 4);
+    if (p.kind === 'weapon') { // моделька оружия — сразу видно, что именно выпало
+      drawWeaponIcon(ctx, p.x, p.y, p.weaponId);
       continue;
     }
     ctx.fillStyle = p.kind === 'coin' ? '#f6d24d' : p.kind === 'bomb' ? '#9e73ee' : '#e0645f';

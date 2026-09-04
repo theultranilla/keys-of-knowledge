@@ -153,6 +153,7 @@ export function drawEnemy(ctx, e, t) {
   if (charger && e.chargeState === 'wind') ring(ctx, r, '#ffe08a', 3, 8);
   if (e.kind === 'boss' && e.enraged) ring(ctx, r, '#ff5a4b', 3, 10);
   if (e.kind === 'boss' && e.variant === 'gunner' && e.burstCd > 0 && e.burstCd < 0.28) ring(ctx, r, '#ffe08a', 3, 7);
+  if (e.slow > 0) ring(ctx, r, 'rgba(140,215,255,0.85)', 2.5, 6); // заморожен «Стужей»
 
   const isShooter = e.kind === 'shooter';
   const isGunner = e.kind === 'boss' && e.variant === 'gunner';

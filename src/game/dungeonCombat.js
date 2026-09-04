@@ -1,6 +1,7 @@
 import { allWalls, roomInterior } from './dungeonFloor.js';
 import { PALETTE } from '../engine/constants.js';
 import { drawEnemy } from './dungeonSprites.js';
+import { drawShot } from './dungeonWeapons.js';
 
 // Бой данжа: враги трёх видов, снаряды игрока и врагов-стрелков. Владеет своими
 // массивами и обновляет их; про игрока/этаж/награды знает через параметры и колбэки
@@ -10,12 +11,18 @@ import { drawEnemy } from './dungeonSprites.js';
 // Оружие игрока: у каждого свой характер (скорострельность, урон, число дробин,
 // разброс, скорость/размер снаряда). Имена — контент, живут в данных. Числа на ощупь.
 export const WEAPONS = {
-  spark:  { name: 'Искра',      fireCd: 0.14, dmg: 1,   pellets: 1, spread: 0,    speed: 560, r: 5, life: 1.1 },
-  spread: { name: 'Тройка',     fireCd: 0.34, dmg: 1,   pellets: 3, spread: 0.22, speed: 520, r: 5, life: 0.9 },
-  rapid:  { name: 'Скорострел', fireCd: 0.07, dmg: 0.6, pellets: 1, spread: 0.05, speed: 640, r: 4, life: 0.9 },
-  heavy:  { name: 'Тяжёлая',    fireCd: 0.5,  dmg: 3,   pellets: 1, spread: 0,    speed: 480, r: 9, life: 1.3 }
+  spark:  { name: 'Искра',      fireCd: 0.14, dmg: 1,   pellets: 1, spread: 0,    speed: 560, r: 5, life: 1.1, style: 'spark' },
+  spread: { name: 'Тройка',     fireCd: 0.34, dmg: 1,   pellets: 3, spread: 0.22, speed: 520, r: 5, life: 0.9, style: 'spread' },
+  rapid:  { name: 'Скорострел', fireCd: 0.07, dmg: 0.6, pellets: 1, spread: 0.05, speed: 640, r: 4, life: 0.9, style: 'rapid' },
+  heavy:  { name: 'Тяжёлая',    fireCd: 0.5,  dmg: 3,   pellets: 1, spread: 0,    speed: 480, r: 9, life: 1.3, style: 'heavy' },
+  // Новые: у каждого свой характер и поведение.
+  laser:  { name: 'Луч',      fireCd: 0.22, dmg: 1.4, pellets: 1, spread: 0,    speed: 820, r: 4, life: 0.7,  style: 'laser',  pierce: true }, // пробивает насквозь
+  shotgun:{ name: 'Раскат',   fireCd: 0.6,  dmg: 0.8, pellets: 5, spread: 0.32, speed: 540, r: 5, life: 0.45, style: 'shot' },                // залп в упор
+  homing: { name: 'Следопыт', fireCd: 0.3,  dmg: 1.1, pellets: 1, spread: 0,    speed: 420, r: 6, life: 1.7,  style: 'homing', homing: true },// самонаводится
+  frost:  { name: 'Стужа',    fireCd: 0.24, dmg: 0.7, pellets: 1, spread: 0.05, speed: 520, r: 6, life: 1.0,  style: 'frost',  slow: true }   // замедляет
 };
-export const WEAPON_DROPS = ['spread', 'rapid', 'heavy']; // что может выпасть (кроме стартовой «Искры»)
+export const WEAPON_DROPS = ['spread', 'rapid', 'heavy', 'laser', 'shotgun', 'homing', 'frost']; // что может выпасть (кроме стартовой «Искры»)
+const SLOW_TIME = 1.6; // сколько держится заморозка врага от «Стужи»
 const ENEMY_SPEED = 95, ENEMY_HP = 4, ENEMY_R = 15, HIT_FLASH = 0.08, CONTACT_DMG = 1;
 // Комнаты чистятся волнами — так бой длится не 5 секунд, а с минуту.
 const WAVE_CAP = 9;
@@ -80,7 +87,10 @@ export function createCombat({ audio, hitPlayer, onClear, onEnemyHit }) {
     for (let k = 0; k < w.pellets; k++) {
       const a = base + (k - (w.pellets - 1) / 2) * w.spread; // веером вокруг прицела
       const dx = Math.cos(a), dy = Math.sin(a);
-      shots.push({ x: cx + dx * 20, y: cy + dy * 20, vx: dx * w.speed, vy: dy * w.speed, life: w.life, dmg: w.dmg, r: w.r });
+      shots.push({
+        x: cx + dx * 20, y: cy + dy * 20, vx: dx * w.speed, vy: dy * w.speed, life: w.life, dmg: w.dmg, r: w.r,
+        style: w.style || 'spark', pierce: !!w.pierce, homing: !!w.homing, slow: !!w.slow, hits: w.pierce ? [] : null
+      });
     }
     audio?.play?.('shoot');
   }
@@ -171,16 +181,26 @@ export function createCombat({ audio, hitPlayer, onClear, onEnemyHit }) {
 
     for (let i = shots.length - 1; i >= 0; i--) {
       const s = shots[i];
+      if (s.homing) { // «Следопыт» подруливает к ближайшему живому врагу
+        let best = null, bd = 1e9;
+        for (const e of current.enemies) if (e.hp > 0) { const dd = Math.hypot(e.x - s.x, e.y - s.y); if (dd < bd) { bd = dd; best = e; } }
+        if (best) {
+          const sp = Math.hypot(s.vx, s.vy) || 1, tx = (best.x - s.x) / (bd || 1), ty = (best.y - s.y) / (bd || 1);
+          s.vx += tx * sp * 6 * dt; s.vy += ty * sp * 6 * dt;
+          const n = Math.hypot(s.vx, s.vy) || 1; s.vx = s.vx / n * sp; s.vy = s.vy / n * sp;
+        }
+      }
       s.x += s.vx * dt; s.y += s.vy * dt; s.life -= dt;
       let dead = s.life <= 0 || walls.some((r) => s.x > r.x && s.x < r.x + r.w && s.y > r.y && s.y < r.y + r.h);
       if (!dead) for (const e of current.enemies) {
-        if (e.hp > 0 && Math.hypot(s.x - e.x, s.y - e.y) < e.r + s.r) {
-          e.hp -= s.dmg * dmgMul; e.hitFlash = HIT_FLASH; dead = true;
-          const sl = Math.hypot(s.vx, s.vy) || 1, m = KB_MASS[e.kind] ?? 1;
-          e.knockX += (s.vx / sl) * KB_STRENGTH * m; // толчок по ходу пули
-          e.knockY += (s.vy / sl) * KB_STRENGTH * m;
-          audio?.play?.('enemyHit'); onEnemyHit?.(s.x, s.y, false, false); break;
-        }
+        if (e.hp <= 0 || Math.hypot(s.x - e.x, s.y - e.y) >= e.r + s.r) continue;
+        if (s.hits) { if (s.hits.includes(e)) continue; s.hits.push(e); } // «Луч» бьёт каждого лишь раз, но летит дальше
+        e.hp -= s.dmg * dmgMul; e.hitFlash = HIT_FLASH;
+        if (s.slow) e.slow = Math.max(e.slow ?? 0, SLOW_TIME);            // «Стужа» замедляет
+        const sl = Math.hypot(s.vx, s.vy) || 1, m = KB_MASS[e.kind] ?? 1;
+        e.knockX += (s.vx / sl) * KB_STRENGTH * m; e.knockY += (s.vy / sl) * KB_STRENGTH * m;
+        audio?.play?.('enemyHit'); onEnemyHit?.(s.x, s.y, false, false);
+        if (!s.pierce) { dead = true; break; }
       }
       if (dead) shots.splice(i, 1);
     }
@@ -207,20 +227,22 @@ export function createCombat({ audio, hitPlayer, onClear, onEnemyHit }) {
       }
       const dx = pc.x - e.x, dy = pc.y - e.y, d = Math.hypot(dx, dy) || 1, nx = dx / d, ny = dy / d;
       e.faceX = nx; e.faceY = ny; // куда смотреть глазами модельки
+      if (e.slow > 0) e.slow -= dt;                    // заморозка от «Стужи» тает
+      const spd = e.speed * (e.slow > 0 ? 0.55 : 1);
       if (e.kind === 'shooter') {
-        if (d > SHOOTER_RANGE + 30) { e.x += nx * e.speed * dt; e.y += ny * e.speed * dt; }
-        else if (d < SHOOTER_RANGE - 30) { e.x -= nx * e.speed * dt; e.y -= ny * e.speed * dt; }
+        if (d > SHOOTER_RANGE + 30) { e.x += nx * spd * dt; e.y += ny * spd * dt; }
+        else if (d < SHOOTER_RANGE - 30) { e.x -= nx * spd * dt; e.y -= ny * spd * dt; }
         e.fireCd -= dt;
         if (e.fireCd <= 0) { eShots.push({ x: e.x, y: e.y, vx: nx * ESHOT_SPEED, vy: ny * ESHOT_SPEED, life: ESHOT_LIFE }); e.fireCd = SHOOTER_FIRE_CD; }
       } else if (e.kind === 'healer') {
         // держит дистанцию и раз в HEAL_CD лечит ближайшего раненого союзника
-        if (d > HEAL_RANGE) { e.x += nx * e.speed * dt; e.y += ny * e.speed * dt; }
-        else if (d < HEAL_RANGE - 60) { e.x -= nx * e.speed * dt; e.y -= ny * e.speed * dt; }
+        if (d > HEAL_RANGE) { e.x += nx * spd * dt; e.y += ny * spd * dt; }
+        else if (d < HEAL_RANGE - 60) { e.x -= nx * spd * dt; e.y -= ny * spd * dt; }
         e.fireCd -= dt;
         if (e.fireCd <= 0) { healNearby(e, current.enemies); e.fireCd = HEAL_CD; }
       } else if (e.kind === 'boss') {
         bossBehavior(e, dt, nx, ny);
-      } else { e.x += nx * e.speed * dt; e.y += ny * e.speed * dt; } // chaser/tank/bomber/splitter
+      } else { e.x += nx * spd * dt; e.y += ny * spd * dt; } // chaser/tank/bomber/splitter
       // Отдача от попаданий поверх обычного движения, с затуханием.
       if (e.knockX || e.knockY) {
         e.x += e.knockX * dt; e.y += e.knockY * dt;
@@ -243,10 +265,9 @@ export function createCombat({ audio, hitPlayer, onClear, onEnemyHit }) {
 
   function draw(ctx, current) {
     for (const e of current.enemies) drawEnemy(ctx, e, animT); // модельки живут в dungeonSprites
-    ctx.fillStyle = '#ff8a4b';
+    ctx.fillStyle = '#ff8a4b'; // снаряды врагов — коралловые
     for (const s of eShots) { ctx.beginPath(); ctx.arc(s.x, s.y, ESHOT_R, 0, Math.PI * 2); ctx.fill(); }
-    ctx.fillStyle = PALETTE.chalk;
-    for (const s of shots) { ctx.beginPath(); ctx.arc(s.x, s.y, s.r, 0, Math.PI * 2); ctx.fill(); }
+    for (const s of shots) drawShot(ctx, s); // свой вид у каждого оружия
   }
 
   return { reset, spawnEnemies, fire, nova, update, draw };

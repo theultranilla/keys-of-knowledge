@@ -1,5 +1,6 @@
 import { VIEW_WIDTH, VIEW_HEIGHT, PALETTE, PLAYER_WIDTH, PLAYER_HEIGHT } from '../engine/constants.js';
 import { drawCharacter } from '../engine/character.js';
+import { drawWeapon } from './dungeonWeapons.js';
 import { DEFAULT_SKIN } from './skins.js';
 import {
   generateFloor, roomInterior, roomContains, allWalls, drawRooms, spawnChests, spawnShop, bossReward,
@@ -517,12 +518,10 @@ export function createDungeonSession({ input, audio, save, canvas, modal, tasks,
     drawCharacter(ctx, px, py, player.width, player.height, skin, player.facing);
     ctx.globalAlpha = 1;
     const cx = px + player.width / 2, cy = py + player.height / 2;
-    ctx.strokeStyle = PALETTE.amber; ctx.lineWidth = 4; ctx.lineCap = 'round';
-    ctx.beginPath(); ctx.moveTo(cx, cy); ctx.lineTo(cx + player.aim.x * 26, cy + player.aim.y * 26); ctx.stroke();
-    if (muzzle > 0) {
-      ctx.fillStyle = '#fff4c0';
-      ctx.beginPath(); ctx.arc(cx + player.aim.x * 28, cy + player.aim.y * 28, 7, 0, Math.PI * 2); ctx.fill();
-    }
+    // тонкая линия прицела для читаемости + моделька оружия в руке (наводится по прицелу)
+    ctx.strokeStyle = 'rgba(242,168,59,0.4)'; ctx.lineWidth = 2; ctx.lineCap = 'round';
+    ctx.beginPath(); ctx.moveTo(cx + player.aim.x * 15, cy + player.aim.y * 15); ctx.lineTo(cx + player.aim.x * 30, cy + player.aim.y * 30); ctx.stroke();
+    drawWeapon(ctx, cx, cy, player.aim.x, player.aim.y, player.weapon, muzzle);
 
     // Подсказка взаимодействия над героем (клавиша E на ПК; на телефоне — тач-кнопка).
     if (focus) {
